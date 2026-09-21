@@ -55,8 +55,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#0B0F1A;color:#fff;mi
       <button class="tab" id="tab-register" onclick="showTab('register')">新規登録</button>
     </div>
     <div id="form-login">
-      <label class="flabel">招待コード<span class="rb">必須</span></label>
-      <input class="finput" type="text" id="login-invite" placeholder="請求書管理番号を入力">
+      <label class="flabel">請求書番号<span class="rb">必須</span></label>
+      <input class="finput" type="text" id="login-invite" placeholder="請求書番号を入力">
       <label class="flabel">メールアドレス<span class="rb">必須</span></label>
       <input class="finput" type="email" id="login-email" placeholder="your@email.com" onkeydown="if(event.key==='Enter')doLogin()">
       <button class="btn" onclick="doLogin()" id="login-btn">ログイン →</button>
@@ -64,9 +64,9 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#0B0F1A;color:#fff;mi
       <div class="note">初めての方は「新規登録」タブから登録してください</div>
     </div>
     <div id="form-register" style="display:none">
-      <div class="invite-note">💡 招待コード（請求書管理番号）は事務局から案内されます。</div>
-      <label class="flabel">招待コード<span class="rb">必須</span></label>
-      <input class="finput" type="text" id="reg-invite" placeholder="請求書管理番号を入力">
+      <div class="invite-note">💡 請求書番号は事務局から案内されます。</div>
+      <label class="flabel">請求書番号<span class="rb">必須</span></label>
+      <input class="finput" type="text" id="reg-invite" placeholder="請求書番号を入力">
       <div class="divider"></div>
       <label class="flabel">会社名<span class="rb">必須</span></label>
       <input class="finput" type="text" id="reg-company" placeholder="株式会社〇〇">
@@ -101,7 +101,7 @@ async function doLogin(){
   const email=document.getElementById('login-email').value.trim();
   const err=document.getElementById('login-err');
   err.classList.remove('show');
-  if(!inviteCode||!email){err.textContent='招待コードとメールアドレスを入力してください';err.classList.add('show');return;}
+  if(!inviteCode||!email){err.textContent='請求書番号とメールアドレスを入力してください';err.classList.add('show');return;}
   const btn=document.getElementById('login-btn');
   btn.disabled=true;btn.textContent='確認中...';
   try{
