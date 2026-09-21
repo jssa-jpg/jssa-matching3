@@ -127,11 +127,7 @@ select option{background:#1a2030;color:#fff}
 </header>
 <div class="hero">
   <h1>最適な出会いを<span>AIが見つける</span></h1>
-  <p>アンケートに回答すると、過去10年間の協会イベント参加者・岡代表と名刺交換された方の中からAIがマッチ度の高い企業を選定します。マッチング結果は岡代表が内容を確認したうえで、企業名のみメールにてご案内いたします。</p>
-  <div class="stat-row">
-    <span class="stat-badge"><strong id="total-count">---</strong>人のビッグデータから分析</span>
-    <span class="stat-badge">過去10年のイベント参加者網羅</span>
-  </div>
+  <p>アンケートに回答すると岡代表がマッチ度の高い企業を数社厳選してメールで案内します。その中で会いたい企業を返信ください。先方が貴社との面談に合意すれば紹介します。</p>
 </div>
 <div class="form-wrap">
   <div class="form-section">
@@ -341,7 +337,7 @@ function saveAnswers(){const answers={industry:getMs('ms1'),listed:document.getE
 function loadAnswers(){const saved=localStorage.getItem('jssa_answers');if(!saved)return;try{const answers=JSON.parse(saved);if(answers.listed)document.getElementById('f-listed').value=answers.listed;if(answers.ma)document.getElementById('f-ma').value=answers.ma;const map={ms1:'industry',ms3:'scale',ms4:'position',ms5:'years',ms6:'capital',ms7:'employees',ms8:'hiring',ms10:'region'};Object.keys(map).forEach(id=>{const savedVals=answers[map[id]]||[];if(savedVals.length>0){document.querySelectorAll('#'+id+'-drop input[type=checkbox]').forEach(c=>{if(savedVals.includes(c.value))c.checked=true;});updateMs(id,null);}});}catch(e){console.error('loadAnswers error:',e);}}
 function logout(){if(!confirm('ログアウトしますか？'))return;sessionStorage.clear();window.location.href='/login';}
 fetch('/.netlify/functions/counter',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.count)document.getElementById('counter-val').textContent=Number(d.count).toLocaleString();}).catch(()=>{});
-fetch('/.netlify/functions/stats').then(r=>r.json()).then(d=>{if(d.total)document.getElementById('total-count').textContent=Number(d.total).toLocaleString();}).catch(()=>{});
+
 if(currentUser.name){document.getElementById('user-name').textContent=currentUser.name;}
 loadAnswers();
 </script>
