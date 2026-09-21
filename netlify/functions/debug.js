@@ -3,7 +3,7 @@ const { getParticipants } = require('./sheets-helper');
 exports.handler = async (event) => {
   const headers = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
   try {
-    const pass = (event.queryStringParameters || {}).pass || "";
+    const pass = event.headers['x-admin-password'] || (event.queryStringParameters || {}).pass || "";
     if (pass !== process.env.ADMIN_PASSWORD) {
       return { statusCode: 401, headers, body: JSON.stringify({ error: "認証が必要です" }) };
     }

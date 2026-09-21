@@ -341,7 +341,7 @@ function saveAnswers(){const answers={industry:getMs('ms1'),listed:document.getE
 function loadAnswers(){const saved=localStorage.getItem('jssa_answers');if(!saved)return;try{const answers=JSON.parse(saved);if(answers.listed)document.getElementById('f-listed').value=answers.listed;if(answers.ma)document.getElementById('f-ma').value=answers.ma;const map={ms1:'industry',ms3:'scale',ms4:'position',ms5:'years',ms6:'capital',ms7:'employees',ms8:'hiring',ms10:'region'};Object.keys(map).forEach(id=>{const savedVals=answers[map[id]]||[];if(savedVals.length>0){document.querySelectorAll('#'+id+'-drop input[type=checkbox]').forEach(c=>{if(savedVals.includes(c.value))c.checked=true;});updateMs(id,null);}});}catch(e){console.error('loadAnswers error:',e);}}
 function logout(){if(!confirm('ログアウトしますか？'))return;sessionStorage.clear();window.location.href='/login';}
 fetch('/.netlify/functions/counter',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.count)document.getElementById('counter-val').textContent=Number(d.count).toLocaleString();}).catch(()=>{});
-fetch('/.netlify/functions/debug?pass=jssa2025').then(r=>r.json()).then(d=>{if(d.total)document.getElementById('total-count').textContent=Number(d.total).toLocaleString();}).catch(()=>{});
+fetch('/.netlify/functions/stats').then(r=>r.json()).then(d=>{if(d.total)document.getElementById('total-count').textContent=Number(d.total).toLocaleString();}).catch(()=>{});
 if(currentUser.name){document.getElementById('user-name').textContent=currentUser.name;}
 loadAnswers();
 </script>
