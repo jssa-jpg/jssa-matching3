@@ -166,14 +166,35 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({success:true,items})};
     }
 
-    if(action==='sendRecommendation'){
-      const{rowIndex,targetCompany,targetPosition,memberCompany,memberName,memberEmail,memberPosition,memberWebsite,memberFacebook,emailBody,matchReason}=body;
+    if(action==='getCompanyContacts'){
+      // ⑤ 対象企業の役職者一覧を取得（同じ会社名で複数の名刺データがある場合に選択できるようにする）
+      const{targetCompany}=body;
+      if(!targetCompany)return{statusCode:400,headers,body:JSON.stringify({error:'企業名が指定されていません'})};
       const participants=await getParticipants();
-      const target=participants.find(p=>p.company===targetCompany);
-      const toEmail=target?.email;
-      if(!toEmail)return{statusCode:404,headers,body:JSON.stringify({error:'送信先メールアドレスが見つかりません'})};
+      const seen=new Set();
+      const contacts=participants.filter(p=>p.company===targetCompany).filter(p=>{
+        const key=p.email||`${p.name}_${p.position}`;
+        if(seen.has(key))return false;seen.add(key);return true;
+      }).map(p=>({name:p.name||'',position:p.position||'',email:p.email||'',department:p.department||''}));
+      return{statusCode:200,headers,body:JSON.stringify({success:true,contacts})};
+    }
+
+    if(action==='sendRecommendation'){
+      const{rowIndex,targetCompany,targetPosition,memberCompany,memberName,memberEmail,memberPosition,memberWebsite,memberFacebook,emailBody,matchReason,targetContactEmail,targetContactName,targetContactPosition}=body;
+      let toEmail=targetContactEmail;
+      let toName=targetContactName;
+      let toPosition=targetContactPosition||targetPosition;
+      if(!toEmail){
+        // 役職者が未選択の場合は従来通り会社名から自動検索（後方互換）
+        const participants=await getParticipants();
+        const target=participants.find(p=>p.company===targetCompany);
+        toEmail=target?.email;
+        toName=toName||target?.name;
+        toPosition=toPosition||target?.position;
+      }
+      if(!toEmail)return{statusCode:404,headers,body:JSON.stringify({error:'送信先メールアドレスが見つかりません。役職者を選択してください。'})};
       const recommendText=matchReason?`\n【推薦理由】\n${matchReason}との判断により、ご推薦させていただきます。\n`:'';
-      const targetHeader=`${targetCompany||''}${targetPosition?' '+targetPosition:''} 担当者様`;
+      const targetHeader=`${targetCompany||''}${toPosition?' '+toPosition:''}${toName?' '+toName+'様':' 担当者様'}`;
       const mailText=emailBody||`${targetHeader}\n\n日本スタートアップ支援協会（JSSA）の岡隆宏と申します。\n平素よりお世話になっております。\n\nこの度、弊協会の会員企業より、貴社との面談・情報交換のご希望をいただきましたので、ご紹介させていただきます。\n${recommendText}\n【ご紹介する会員】\n会社名：${memberCompany||'—'}\n役職　：${memberPosition||'—'}\n氏名　：${memberName||'—'}\nメール：${memberEmail||'—'}\n会社HP：${memberWebsite||'—'}\nFacebook：${memberFacebook||'—'}\n\nご都合がよろしければ、直接${memberName}様にご連絡いただけますと幸いです。\nご不明な点がございましたら、私（岡）までお気軽にご連絡ください。\n\n今後ともどうぞよろしくお願いいたします。\n\n${SIGNATURE}`;
       const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'tok@yumeplanning.jp',to:[toEmail],reply_to:OFFICE_EMAIL,subject:`【ご紹介】${memberCompany} ${memberName}様のご紹介`,html:`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:10px;"><div style="background:#0B0F1A;padding:14px 20px;border-radius:8px;margin-bottom:20px;"><span style="background:#639922;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;">JSSA</span><span style="color:#fff;font-size:13px;margin-left:8px;">日本スタートアップ支援協会</span></div><div style="font-size:14px;color:#374151;line-height:1.8;">${mailText.replace(/\n/g,'<br>')}</div></div>`})});
       const resData=await res.json();

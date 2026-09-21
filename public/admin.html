@@ -319,7 +319,6 @@ function renderCards(){
 function openDetail(r){
   isDetailOpen=true;
   const area=document.getElementById('detail-area');
-  const defaultMsg=`${r.targetCompany||''}${r.targetPosition?' '+r.targetPosition:''} 担当者様\n\n日本スタートアップ支援協会（JSSA）の岡隆宏と申します。\n平素よりお世話になっております。\n\nこの度、弊協会の会員企業より、貴社との面談・情報交換のご希望をいただきましたので、ご紹介させていただきます。\n${r.matchReason?'\n【推薦理由】\n'+r.matchReason+'との判断により、ご推薦させていただきます。\n':''}\n【ご紹介する会員】\n会社名：${r.memberCompany||'—'}\n氏名　：${r.memberName||'—'}\nメール：${r.memberEmail||'—'}\n\nご都合がよろしければ、直接${r.memberName||''}様にご連絡いただけますと幸いです。\nご不明な点がございましたら、私（岡）までお気軽にご連絡ください。\n\n今後ともどうぞよろしくお願いいたします。`;
   area.innerHTML=`<div class="detail-wrap" id="detail-box" style="display:block">
     <div class="detail-head"><div class="detail-title">📨 推薦メール送信：${r.targetCompany||''}</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
     <div class="from-box"><div class="from-label">✅ 申請者情報</div><div class="from-info">
@@ -329,15 +328,59 @@ function openDetail(r){
       ${r.matchReason?`<div style="margin-top:8px;color:#639922;font-weight:600">🎯 ${r.matchReason}</div>`:''}
       ${r.recommendation?`<div style="margin-top:4px;color:#374151">${r.recommendation}</div>`:''}
     </div></div>
-    <label class="edit-label">メッセージ（編集可能）</label>
-    <textarea id="edit-msg" rows="12" oninput="document.getElementById('edit-char').textContent=this.value.length+'/2000'">${defaultMsg}</textarea>
-    <div class="char-count" id="edit-char">${defaultMsg.length}/2000</div>
+    <label class="edit-label">① 送信先の役職者を選択</label>
+    <select id="contact-select" onchange="onContactChange(${JSON.stringify(r).replace(/'/g,"&#39;")})" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px">
+      <option value="">読み込み中...</option>
+    </select>
+    <label class="edit-label">② メッセージ（自動生成・編集可能）</label>
+    <textarea id="edit-msg" rows="12"></textarea>
+    <div class="char-count" id="edit-char">0/2000</div>
     <div class="detail-actions">
       <button class="btn-cancel" onclick="closeDetail()">キャンセル</button>
       <button class="btn-send" id="btn-send" onclick='sendRecommendation(${JSON.stringify(r).replace(/'/g,"&#39;")})'>📨 推薦メールを送信する</button>
     </div>
   </div>`;
+  document.getElementById('edit-msg').oninput=function(){document.getElementById('edit-char').textContent=this.value.length+'/2000';};
   area.scrollIntoView({behavior:'smooth'});
+  loadCompanyContacts(r);
+}
+
+let currentContacts=[];
+
+async function loadCompanyContacts(r){
+  const sel=document.getElementById('contact-select');
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getCompanyContacts',targetCompany:r.targetCompany})});
+    const data=await res.json();
+    currentContacts=(data.success?data.contacts:[])||[];
+    if(currentContacts.length===0){
+      sel.innerHTML='<option value="">該当する担当者データが見つかりません（手動でメール本文にメールアドレスを追記してください）</option>';
+      buildDefaultMsg(r,null);
+      return;
+    }
+    sel.innerHTML=currentContacts.map((c,i)=>`<option value="${i}">${c.name||'（氏名不明）'} / ${c.position||'役職不明'} / ${c.email||'メール不明'}</option>`).join('');
+    sel.value='0';
+    buildDefaultMsg(r,currentContacts[0]);
+  }catch(e){
+    sel.innerHTML='<option value="">読み込みエラー</option>';
+  }
+}
+
+function onContactChange(r){
+  const sel=document.getElementById('contact-select');
+  const idx=sel.value;
+  const contact=idx!==''?currentContacts[idx]:null;
+  buildDefaultMsg(r,contact);
+}
+
+function buildDefaultMsg(r,contact){
+  const toName=contact?.name||'';
+  const toPosition=contact?.position||r.targetPosition||'';
+  const header=`${r.targetCompany||''}${toPosition?' '+toPosition:''}${toName?' '+toName+'様':' 担当者様'}`;
+  const defaultMsg=`${header}\n\n日本スタートアップ支援協会（JSSA）の岡隆宏と申します。\n平素よりお世話になっております。\n\nこの度、弊協会の会員企業より、貴社との面談・情報交換のご希望をいただきましたので、ご紹介させていただきます。\n${r.matchReason?'\n【推薦理由】\n'+r.matchReason+'との判断により、ご推薦させていただきます。\n':''}\n【ご紹介する会員】\n会社名：${r.memberCompany||'—'}\n氏名　：${r.memberName||'—'}\nメール：${r.memberEmail||'—'}\n\nご都合がよろしければ、直接${r.memberName||''}様にご連絡いただけますと幸いです。\nご不明な点がございましたら、私（岡）までお気軽にご連絡ください。\n\n今後ともどうぞよろしくお願いいたします。`;
+  const ta=document.getElementById('edit-msg');
+  ta.value=defaultMsg;
+  document.getElementById('edit-char').textContent=defaultMsg.length+'/2000';
 }
 
 function closeDetail(){
@@ -348,10 +391,14 @@ function closeDetail(){
 async function sendRecommendation(r){
   const msg=document.getElementById('edit-msg').value;
   if(!msg.trim()){alert('メッセージを入力してください');return;}
+  const sel=document.getElementById('contact-select');
+  const idx=sel.value;
+  const contact=idx!==''?currentContacts[idx]:null;
+  if(!contact){if(!confirm('役職者が選択されていません。既存データから自動検索して送信しますか？'))return;}
   const btn=document.getElementById('btn-send');
   btn.textContent='送信中...';btn.disabled=true;
   try{
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendRecommendation',rowIndex:r.rowIndex,targetCompany:r.targetCompany,targetPosition:r.targetPosition,memberCompany:r.memberCompany,memberName:r.memberName,memberEmail:r.memberEmail,memberPosition:r.targetPosition,emailBody:msg,matchReason:r.matchReason})});
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendRecommendation',rowIndex:r.rowIndex,targetCompany:r.targetCompany,targetPosition:r.targetPosition,memberCompany:r.memberCompany,memberName:r.memberName,memberEmail:r.memberEmail,memberPosition:r.targetPosition,emailBody:msg,matchReason:r.matchReason,targetContactEmail:contact?.email,targetContactName:contact?.name,targetContactPosition:contact?.position})});
     const data=await res.json();
     if(data.success){closeDetail();alert('推薦メールを送信しました！');loadRequests();}
     else alert('エラー: '+(data.error||'送信失敗'));
