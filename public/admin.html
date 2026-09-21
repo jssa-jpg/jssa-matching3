@@ -54,6 +54,16 @@ header{background:#000F1A;padding:0;position:sticky;top:0;z-index:100}
 .info-item .value{font-size:13px;color:#374151;font-weight:500}
 .msg-box{background:#f9fafb;border-radius:8px;padding:12px;font-size:12px;color:#374151;line-height:1.6;margin-bottom:12px;border:1px solid #e5e7eb}
 .reason-box{background:#f0f9e8;border-radius:8px;padding:12px;font-size:12px;color:#374151;line-height:1.6;margin-bottom:12px;border:1px solid #c0dd97}
+.select-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.sel-btns{display:flex;gap:6px}
+.sel-btn{background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;font-size:11px;color:#374151;cursor:pointer}
+.sel-btn:hover{background:#f3f4f6}
+.sel-count{font-size:11px;color:#6b7280;font-weight:600}
+.company-list{background:#f0f9e8;border-radius:8px;padding:8px 12px;margin-bottom:12px;border:1px solid #c0dd97;max-height:260px;overflow-y:auto}
+.company-item{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:12px;color:#374151;line-height:1.5;border-bottom:1px solid rgba(0,0,0,0.05)}
+.company-item:last-child{border-bottom:none}
+.company-item input[type=checkbox]{width:15px;height:15px;flex-shrink:0;accent-color:#639922;cursor:pointer}
+.company-item label{cursor:pointer;flex:1}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 .btn-approve{background:#0B0F1A;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;flex:1}
 .btn-approve:hover{background:#639922}
@@ -188,14 +198,32 @@ async function loadMatchResults(){
   }catch(e){alert('通信エラー: '+e.message);}
 }
 
+let selectedCompanies={}; // batchId -> Set(rowIndex)
+
+function toggleCompanySelect(batchId,rowIndex,checked){
+  if(!selectedCompanies[batchId])selectedCompanies[batchId]=new Set();
+  if(checked)selectedCompanies[batchId].add(rowIndex);
+  else selectedCompanies[batchId].delete(rowIndex);
+  const el=document.getElementById(`selcount-${batchId}`);
+  if(el)el.textContent=`${selectedCompanies[batchId].size}社を選択中`;
+}
+
+function selectAllInBatch(batchId,rowIndexes,checked){
+  selectedCompanies[batchId]=new Set(checked?rowIndexes:[]);
+  renderCards();
+}
+
 async function sendCompanyNames(batch){
-  if(!confirm(`${batch.userName||batch.userCompany}様に、以下${batch.companies.length}社の企業名をメールで送信します。よろしいですか？`))return;
+  const selSet=selectedCompanies[batch.batchId];
+  if(!selSet||selSet.size===0){alert('送信する企業を1社以上選択してください（チェックボックスで採択してください）');return;}
+  const chosen=batch.companies.filter(c=>selSet.has(c.rowIndex));
+  if(!confirm(`${batch.userName||batch.userCompany}様に、採択した${chosen.length}社の企業名をメールで送信します。よろしいですか？`))return;
   try{
-    const rowIndexes=batch.companies.map(c=>c.rowIndex);
-    const companies=batch.companies.map(c=>c.targetCompany);
+    const rowIndexes=chosen.map(c=>c.rowIndex);
+    const companies=chosen.map(c=>c.targetCompany);
     const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendCompanyNames',batchId:batch.batchId,rowIndexes,userEmail:batch.userEmail,userName:batch.userName,companies})});
     const data=await res.json();
-    if(data.success){alert('企業名一覧を送信しました');loadMatchResults();}
+    if(data.success){alert('企業名一覧を送信しました');delete selectedCompanies[batch.batchId];loadMatchResults();}
     else{alert(data.error||'送信に失敗しました');}
   }catch(e){alert('エラー: '+e.message);}
 }
@@ -248,15 +276,30 @@ function renderCards(){
     if(matchBatches.length===0){area.innerHTML='<div class="empty">マッチング結果はまだありません</div>';return;}
     area.innerHTML=matchBatches.map(b=>{
       const statusBadge=b.status==='未通知'?'<span class="badge badge-new">⏳ 未通知</span>':'<span class="badge badge-done">✅ 企業名送信済み</span>';
-      const companiesList=b.companies.map((c,i)=>`${i+1}. ${c.targetCompany}${c.score?`（マッチ度${c.score}%）`:''}`).join('<br>');
+      const selSet=selectedCompanies[b.batchId]||new Set();
+      const companyItems=b.companies.map((c,i)=>{
+        const checked=selSet.has(c.rowIndex)?'checked':'';
+        const cid=`cb-${b.batchId}-${c.rowIndex}`;
+        return `<div class="company-item">
+          <input type="checkbox" id="${cid}" ${checked} onchange="toggleCompanySelect('${b.batchId}',${c.rowIndex},this.checked)">
+          <label for="${cid}">${i+1}. ${c.targetCompany}${c.score?`（マッチ度${c.score}%）`:''}</label>
+        </div>`;
+      }).join('');
       return `<div class="card">
         <div class="card-head">
           <div><div class="card-title">${b.userCompany||'—'} ${b.userName||''}</div><div class="card-sub">${b.userEmail||''} | ${b.createdAt?b.createdAt.slice(0,10):''} | ${b.companies.length}社マッチ</div></div>
           ${statusBadge}
         </div>
-        <div class="reason-box">${companiesList}</div>
+        <div class="select-toolbar">
+          <div class="sel-btns">
+            <button class="sel-btn" onclick="selectAllInBatch('${b.batchId}',${JSON.stringify(b.companies.map(c=>c.rowIndex))},true)">全選択</button>
+            <button class="sel-btn" onclick="selectAllInBatch('${b.batchId}',${JSON.stringify(b.companies.map(c=>c.rowIndex))},false)">全解除</button>
+          </div>
+          <div class="sel-count" id="selcount-${b.batchId}">${selSet.size}社を選択中</div>
+        </div>
+        <div class="company-list">${companyItems}</div>
         <div class="actions">
-          <button class="btn-approve" onclick='sendCompanyNames(${JSON.stringify(b).replace(/'/g,"&#39;")})'>📧 企業名のみメール送信</button>
+          <button class="btn-approve" onclick='sendCompanyNames(${JSON.stringify(b).replace(/'/g,"&#39;")})'>📧 採択した企業だけメール送信</button>
           <button class="btn-decline" onclick='addRequestFromReply(${JSON.stringify(b).replace(/'/g,"&#39;")})'>💬 ユーザー返信を登録</button>
         </div>
       </div>`;
