@@ -151,11 +151,15 @@ exports.handler=async(event)=>{
           const prompt=`あなたはJSSAエコシステムマッチングツールのAIアシスタントです。\n以下の企業リストについて、それぞれマッチ理由と推薦理由を日本語で生成してください。\n\nアンケート回答：\n- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n\n企業リスト：\n${list}\n\n以下のJSON配列形式のみで回答してください（企業リストと同じ順番・同じ件数で）：\n[{"matchReason":"マッチ理由50文字以内","recommendation":"推薦理由150文字以内"}]`;
           const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,messages:[{role:'user',content:prompt}]})});
           const aiData=await aiRes.json();
+          if(!aiRes.ok){
+            console.error('Anthropic API error:',aiRes.status,JSON.stringify(aiData));
+          }
           const aiText=aiData.content&&aiData.content[0]?aiData.content[0].text:'[]';
+          console.log('AI raw response text:',aiText.slice(0,500));
           const cleanText=aiText.replace(/```json|```/g,'').trim();
           const aiArr=JSON.parse(cleanText);
           enriched=results.map((r,i)=>({...r,matchReason:(aiArr[i]&&aiArr[i].matchReason)||'',recommendation:(aiArr[i]&&aiArr[i].recommendation)||''}));
-        }catch(e){console.error('AI enrich error:',e.message);}
+        }catch(e){console.error('AI enrich error:',e.message,e.stack);}
       }
       return{statusCode:200,headers,body:JSON.stringify({success:true,companies:enriched})};
     }
