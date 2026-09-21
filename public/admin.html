@@ -58,12 +58,20 @@ header{background:#000F1A;padding:0;position:sticky;top:0;z-index:100}
 .sel-btns{display:flex;gap:6px}
 .sel-btn{background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;font-size:11px;color:#374151;cursor:pointer}
 .sel-btn:hover{background:#f3f4f6}
+.sel-btn:disabled{opacity:.5;cursor:default}
 .sel-count{font-size:11px;color:#6b7280;font-weight:600}
-.company-list{background:#f0f9e8;border-radius:8px;padding:8px 12px;margin-bottom:12px;border:1px solid #c0dd97;max-height:260px;overflow-y:auto}
-.company-item{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:12px;color:#374151;line-height:1.5;border-bottom:1px solid rgba(0,0,0,0.05)}
-.company-item:last-child{border-bottom:none}
-.company-item input[type=checkbox]{width:15px;height:15px;flex-shrink:0;accent-color:#639922;cursor:pointer}
-.company-item label{cursor:pointer;flex:1}
+.company-detail-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.company-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px}
+.company-card-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.company-card-head input[type=checkbox]{width:16px;height:16px;flex-shrink:0;accent-color:#639922;cursor:pointer}
+.company-card-name{font-size:13px;font-weight:700;color:#0B0F1A;cursor:pointer}
+.company-card-body{font-size:11px;color:#374151;line-height:1.7}
+.company-card-body .cc-row{display:flex;flex-wrap:wrap;gap:4px 14px}
+.company-card-body b{color:#111827}
+.company-card .reason-box{margin-top:6px}
+.load-more-btn{width:100%;background:#fff;border:1px dashed #9ca3af;border-radius:8px;padding:10px;font-size:12px;color:#374151;cursor:pointer;margin-bottom:10px}
+.load-more-btn:hover{background:#f3f4f6}
+.load-more-btn:disabled{opacity:.6;cursor:default}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 .btn-approve{background:#0B0F1A;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;flex:1}
 .btn-approve:hover{background:#639922}
@@ -199,6 +207,7 @@ async function loadMatchResults(){
 }
 
 let selectedCompanies={}; // batchId -> Set(rowIndex)
+let loadedDetails={}; // batchId -> [{rowIndex, company, department, ... , matchReason, recommendation}]
 
 function toggleCompanySelect(batchId,rowIndex,checked){
   if(!selectedCompanies[batchId])selectedCompanies[batchId]=new Set();
@@ -208,9 +217,35 @@ function toggleCompanySelect(batchId,rowIndex,checked){
   if(el)el.textContent=`${selectedCompanies[batchId].size}社を選択中`;
 }
 
-function selectAllInBatch(batchId,rowIndexes,checked){
-  selectedCompanies[batchId]=new Set(checked?rowIndexes:[]);
+function selectAllLoaded(batchId,checked){
+  const loaded=loadedDetails[batchId]||[];
+  selectedCompanies[batchId]=new Set(checked?loaded.map(c=>c.rowIndex):[]);
   renderCards();
+}
+
+async function loadNextCompanies(batchId){
+  const batch=matchBatches.find(b=>b.batchId===batchId);
+  if(!batch)return;
+  const loaded=loadedDetails[batchId]||[];
+  const nextItems=batch.companies.slice(loaded.length,loaded.length+10);
+  if(nextItems.length===0)return;
+  const btn=document.getElementById(`loadmore-${batchId}`);
+  if(btn){btn.disabled=true;btn.textContent='読み込み中…（AIが推薦理由を生成しています）';}
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getCompanyDetails',items:nextItems.map(it=>({company:it.targetCompany,score:it.score,cardRow:it.cardRow})),aiParams:batch.aiParams||{}})});
+    const data=await res.json();
+    if(data.success){
+      const merged=data.companies.map((c,i)=>({...c,rowIndex:nextItems[i].rowIndex}));
+      loadedDetails[batchId]=[...loaded,...merged];
+      renderCards();
+    }else{
+      alert(data.error||'取得に失敗しました');
+      if(btn){btn.disabled=false;btn.textContent=loaded.length===0?'詳細を表示（先頭10社）':`次の10社を表示（残り${batch.companies.length-loaded.length}社）`;}
+    }
+  }catch(e){
+    alert('エラー: '+e.message);
+    if(btn){btn.disabled=false;btn.textContent=loaded.length===0?'詳細を表示（先頭10社）':`次の10社を表示（残り${batch.companies.length-loaded.length}社）`;}
+  }
 }
 
 async function sendCompanyNames(batch){
@@ -276,32 +311,50 @@ function renderCards(){
     if(matchBatches.length===0){area.innerHTML='<div class="empty">マッチング結果はまだありません</div>';return;}
     area.innerHTML=matchBatches.map(b=>{
       const statusBadge=b.status==='未通知'?'<span class="badge badge-new">⏳ 未通知</span>':'<span class="badge badge-done">✅ 企業名送信済み</span>';
+      const loaded=loadedDetails[b.batchId]||[];
       const selSet=selectedCompanies[b.batchId]||new Set();
-      const companyItems=b.companies.map((c,i)=>{
+      const totalCount=b.companies.length;
+      const hasMore=loaded.length<totalCount;
+      const detailCards=loaded.map(c=>{
         const checked=selSet.has(c.rowIndex)?'checked':'';
         const cid=`cb-${b.batchId}-${c.rowIndex}`;
-        return `<div class="company-item">
-          <input type="checkbox" id="${cid}" ${checked} onchange="toggleCompanySelect('${b.batchId}',${c.rowIndex},this.checked)">
-          <label for="${cid}">${i+1}. ${c.targetCompany}${c.score?`（マッチ度${c.score}%）`:''}</label>
+        return `<div class="company-card">
+          <div class="company-card-head">
+            <input type="checkbox" id="${cid}" ${checked} onchange="toggleCompanySelect('${b.batchId}',${c.rowIndex},this.checked)">
+            <label for="${cid}" class="company-card-name">${c.company||'（企業名不明）'}${c.score?`（マッチ度${c.score}%）`:''}</label>
+          </div>
+          <div class="company-card-body">
+            <div class="cc-row"><span><b>部署:</b> ${c.department||'-'}</span><span><b>役職:</b> ${c.position||'-'}</span><span><b>担当者名:</b> ${c.name||'-'}</span></div>
+            <div class="cc-row"><span><b>メール:</b> ${c.email||'-'}</span><span><b>電話:</b> ${c.telOffice||c.telDirect||c.mobile||'-'}</span></div>
+            <div class="cc-row"><span><b>住所:</b> ${(c.zip?c.zip+' ':'')}${c.address||'-'}</span></div>
+            <div class="cc-row"><span><b>業種:</b> ${c.industry||'-'}</span><span><b>従業員数:</b> ${c.employees||'-'}</span><span><b>設立:</b> ${c.founded||'-'}</span><span><b>資本金:</b> ${c.capital||'-'}</span><span><b>上場:</b> ${c.listed||'未上場'}</span></div>
+            <div class="cc-row"><span><b>サイト:</b> ${c.siteUrl?`<a href="${c.siteUrl}" target="_blank" rel="noopener">${c.siteUrl}</a>`:'-'}</span></div>
+            <div style="margin-top:6px"><b>会社概要:</b> ${c.features||'情報なし'}</div>
+            ${c.matchReason?`<div style="margin-top:4px"><b>マッチ理由:</b> ${c.matchReason}</div>`:''}
+            ${c.recommendation?`<div class="reason-box">🎯 <b>推薦理由:</b> ${c.recommendation}</div>`:''}
+            ${!c.found?`<div style="color:#991b1b;margin-top:4px">⚠️ 名刺データが見つかりませんでした（削除・変更された可能性）</div>`:''}
+          </div>
         </div>`;
       }).join('');
+      const loadMoreLabel=loaded.length===0?'詳細を表示（先頭10社）':`次の10社を表示（残り${totalCount-loaded.length}社）`;
       return `<div class="card">
         <div class="card-head">
-          <div><div class="card-title">${b.userCompany||'—'} ${b.userName||''}</div><div class="card-sub">${b.userEmail||''} | ${b.createdAt?b.createdAt.slice(0,10):''} | ${b.companies.length}社マッチ</div></div>
+          <div><div class="card-title">${b.userCompany||'—'} ${b.userName||''}</div><div class="card-sub">${b.userEmail||''} | ${b.createdAt?b.createdAt.slice(0,10):''} | ${totalCount}社マッチ</div></div>
           ${statusBadge}
         </div>
-        <div class="select-toolbar">
+        ${loaded.length>0?`<div class="select-toolbar">
           <div class="sel-btns">
-            <button class="sel-btn" onclick="selectAllInBatch('${b.batchId}',${JSON.stringify(b.companies.map(c=>c.rowIndex))},true)">全選択</button>
-            <button class="sel-btn" onclick="selectAllInBatch('${b.batchId}',${JSON.stringify(b.companies.map(c=>c.rowIndex))},false)">全解除</button>
+            <button class="sel-btn" onclick="selectAllLoaded('${b.batchId}',true)">表示中を全選択</button>
+            <button class="sel-btn" onclick="selectAllLoaded('${b.batchId}',false)">全解除</button>
           </div>
           <div class="sel-count" id="selcount-${b.batchId}">${selSet.size}社を選択中</div>
-        </div>
-        <div class="company-list">${companyItems}</div>
-        <div class="actions">
+        </div>`:''}
+        <div class="company-detail-list">${detailCards}</div>
+        ${hasMore?`<button class="load-more-btn" id="loadmore-${b.batchId}" onclick="loadNextCompanies('${b.batchId}')">${loadMoreLabel}</button>`:''}
+        ${loaded.length>0?`<div class="actions">
           <button class="btn-approve" onclick='sendCompanyNames(${JSON.stringify(b).replace(/'/g,"&#39;")})'>📧 採択した企業だけメール送信</button>
           <button class="btn-decline" onclick='addRequestFromReply(${JSON.stringify(b).replace(/'/g,"&#39;")})'>💬 ユーザー返信を登録</button>
-        </div>
+        </div>`:''}
       </div>`;
     }).join('');
     return;

@@ -71,6 +71,7 @@ async function getParticipants() {
 
     participants.push({
       id: pid++,
+      cardRow: i + 1,
       company, department, position,
       industry, scale: scaleClass, employees,
       founded, capital,
@@ -162,7 +163,7 @@ async function getMonthlyRequestCount(userId) {
 }
 
 // アプリ2用：マッチング結果を「マッチング結果」シートに保存（管理者レビュー用、ユーザーには非公開）
-async function saveMatchResultsForReview(userId, userInfo, matches) {
+async function saveMatchResultsForReview(userId, userInfo, matches, aiParams) {
   try {
     if (!matches || matches.length === 0) return;
     const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -170,10 +171,11 @@ async function saveMatchResultsForReview(userId, userInfo, matches) {
     const token = await getAccessToken(serviceAccount);
     const now = new Date().toISOString();
     const batchId = `${String(userId || 'guest')}_${now}`;
-    // 列: バッチID, 日時, ユーザーID, ユーザー会社名, ユーザー氏名, ユーザーメール, マッチ企業名, スコア, ステータス（未通知/企業名送信済み）
+    const aiParamsJson = JSON.stringify(aiParams || {});
+    // 列: バッチID, 日時, ユーザーID, ユーザー会社名, ユーザー氏名, ユーザーメール, マッチ企業名, スコア, ステータス（未通知/企業名送信済み）, アンケート回答JSON, 名刺データ上の行番号
     const values = matches.map(m => [
       batchId, now, String(userId || ''), userInfo.company || '', userInfo.name || '',
-      userInfo.email || '', m.company, String(m.score || ''), '未通知'
+      userInfo.email || '', m.company, String(m.score || ''), '未通知', aiParamsJson, String(m.cardRow || '')
     ]);
     await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('マッチング結果')}:append?valueInputOption=RAW`,

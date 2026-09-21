@@ -192,8 +192,9 @@ const companySearch=body.companySearch||'';
 if(companySearch){
   const matched=all.filter(p=>p.company&&p.company.includes(companySearch));
   const ui2=body.userInfo||{};
+  const aiParamsForSearch={industry,listed,scale,position,region};
   try{
-    await saveMatchResultsForReview(userId,ui2,matched.map(p=>({company:p.company,score:''})));
+    await saveMatchResultsForReview(userId,ui2,matched.map(p=>({company:p.company,score:'',cardRow:p.cardRow||0})),aiParamsForSearch);
   }catch(e){console.error('saveMatchResultsForReview error:',e.message);}
   return{statusCode:200,headers,body:JSON.stringify({success:true,submitted:true,count:matched.length})};
 }
@@ -241,7 +242,7 @@ if(hiring.length>0&&hiring[0]!=='こだわらない')s+=3;
 if(years.length>0&&years[0]!=='こだわらない')s+=3;
 if(region.length>0&&pf){for(let j=0;j<region.length;j++){const r=region[j];if(!r)continue;let m=false;if(r==="東京都のみ"&&pf.startsWith("東京都"))m=true;if(r==="関東"&&(pf.startsWith("東京都")||pf.startsWith("神奈川県")||pf.startsWith("埼玉県")||pf.startsWith("千葉県")))m=true;if(r==="関西"&&(pf.startsWith("大阪府")||pf.startsWith("兵庫県")||pf.startsWith("京都府")))m=true;if(r==="北海道"&&pf.startsWith("北海道"))m=true;if(r==="九州・沖縄"&&(pf.startsWith("福岡県")||pf.startsWith("沖縄県")))m=true;if(m){s+=10;break;}}}
 const pct=Math.min(Math.round((s/150)*100),99);
-scored.push({id:p.id||"",company:p.company||"",department:p.department||"",position:pp,industry:pi,scale:ps,prefecture:pf,listed:p.listed||"",employees:p.employees||"",founded:p.founded||"",capital:p.capital||"",hiring:p.hiring||"",ma:pm,features:p.features||"",siteUrl:p.siteUrl||"",score:pct,matchReason:"",recommendation:"",firstMessage:""});
+scored.push({id:p.id||"",cardRow:p.cardRow||0,company:p.company||"",department:p.department||"",position:pp,industry:pi,scale:ps,prefecture:pf,listed:p.listed||"",employees:p.employees||"",founded:p.founded||"",capital:p.capital||"",hiring:p.hiring||"",ma:pm,features:p.features||"",siteUrl:p.siteUrl||"",score:pct,matchReason:"",recommendation:"",firstMessage:""});
 }
 scored.sort((a,b)=>b.score-a.score);
 const top100=scored.slice(0,100);
@@ -249,8 +250,9 @@ const top100=scored.slice(0,100);
 // スコア上位の企業をレビュー用シートに保存し、岡代表が管理画面で確認した上で
 // 企業名のみをメールで通知するフローに変更。
 const ui=body.userInfo||{};
+const aiParams={industry,listed,scale,position,region};
 try{
-  await saveMatchResultsForReview(userId,ui,top100.map(m=>({company:m.company,score:m.score})));
+  await saveMatchResultsForReview(userId,ui,top100.map(m=>({company:m.company,score:m.score,cardRow:m.cardRow})),aiParams);
 }catch(e){console.error('saveMatchResultsForReview error:',e.message);}
 return{statusCode:200,headers,body:JSON.stringify({success:true,submitted:true,count:top100.length})};
 }catch(e){return{statusCode:500,headers,body:JSON.stringify({error:e.message,stack:e.stack})};}

@@ -1,5 +1,6 @@
 const{getParticipants}=require('./sheets-helper');
 const RESEND_API_KEY=process.env.RESEND_API_KEY;
+const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const OFFICE_EMAIL='tok@yumeplanning.jp';
 const ADMIN_PASSWORD=process.env.ADMIN_PASSWORD;
 
@@ -104,19 +105,59 @@ exports.handler=async(event)=>{
       const items=rows.slice(1).map((r,i)=>({
         rowIndex:i+2,batchId:r[0]||'',createdAt:r[1]||'',userId:r[2]||'',
         userCompany:r[3]||'',userName:r[4]||'',userEmail:r[5]||'',
-        targetCompany:r[6]||'',score:r[7]||'',status:r[8]||'未通知'
+        targetCompany:r[6]||'',score:r[7]||'',status:r[8]||'未通知',
+        aiParamsJson:r[9]||'',cardRow:parseInt(r[10])||0
       }));
       const batches={};
       for(const it of items){
         if(!batches[it.batchId]){
-          batches[it.batchId]={batchId:it.batchId,createdAt:it.createdAt,userId:it.userId,userCompany:it.userCompany,userName:it.userName,userEmail:it.userEmail,status:it.status,companies:[]};
+          let aiParams={};
+          try{aiParams=JSON.parse(it.aiParamsJson||'{}');}catch(e){aiParams={};}
+          batches[it.batchId]={batchId:it.batchId,createdAt:it.createdAt,userId:it.userId,userCompany:it.userCompany,userName:it.userName,userEmail:it.userEmail,status:it.status,aiParams,companies:[]};
         }
-        batches[it.batchId].companies.push({rowIndex:it.rowIndex,targetCompany:it.targetCompany,score:it.score,status:it.status});
+        batches[it.batchId].companies.push({rowIndex:it.rowIndex,targetCompany:it.targetCompany,score:it.score,status:it.status,cardRow:it.cardRow});
         // バッチ全体のステータスは「1件でも未通知があれば未通知」とする
         if(it.status==='未通知')batches[it.batchId].status='未通知';
       }
       const list=Object.values(batches).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
       return{statusCode:200,headers,body:JSON.stringify({success:true,batches:list})};
+    }
+
+    if(action==='getCompanyDetails'){
+      // マッチング結果の企業リストについて、名刺データの全項目とAIによる推薦理由をまとめて返す（10社程度の小口指定を想定）
+      const{items,aiParams}=body;
+      if(!Array.isArray(items)||items.length===0)return{statusCode:400,headers,body:JSON.stringify({error:'items is required'})};
+      const cardRows=await getSheet(token,'名刺データ');
+      const results=items.map(it=>{
+        const rowIdx=it.cardRow;
+        const row=(rowIdx&&rowIdx>1)?cardRows[rowIdx-1]:null;
+        if(!row){
+          return{company:it.company||'',score:it.score||'',found:false,department:'',position:'',name:'',email:'',zip:'',address:'',telOffice:'',telDept:'',telDirect:'',fax:'',mobile:'',siteUrl:'',cardDate:'',industry:'',scale:'',employees:'',founded:'',capital:'',listed:'',hiring:'',ma:'',features:'',facebook:''};
+        }
+        return{
+          found:true,score:it.score||'',
+          company:row[0]||it.company||'',department:row[1]||'',position:row[2]||'',name:row[3]||'',
+          email:row[4]||'',zip:row[5]||'',address:row[6]||'',telOffice:row[7]||'',telDept:row[8]||'',
+          telDirect:row[9]||'',fax:row[10]||'',mobile:row[11]||'',siteUrl:row[12]||'',cardDate:row[13]||'',
+          industry:row[14]||'',scale:row[15]||'',employees:row[16]||'',founded:row[17]||'',capital:row[18]||'',
+          listed:row[19]||'',hiring:row[20]||'',ma:row[21]||'',features:row[22]||'',facebook:row[23]||''
+        };
+      });
+      let enriched=results.map(r=>({...r,matchReason:'',recommendation:''}));
+      if(ANTHROPIC_API_KEY){
+        try{
+          const ap=aiParams||{};
+          const list=results.map((r,i)=>`${i+1}. ${r.company}（${r.industry||'業種不明'}・${r.address||'地域不明'}・スコア${r.score}%）\n特徴：${r.features||'情報なし'}`).join('\n\n');
+          const prompt=`あなたはJSSAエコシステムマッチングツールのAIアシスタントです。\n以下の企業リストについて、それぞれマッチ理由と推薦理由を日本語で生成してください。\n\nアンケート回答：\n- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n\n企業リスト：\n${list}\n\n以下のJSON配列形式のみで回答してください（企業リストと同じ順番・同じ件数で）：\n[{"matchReason":"マッチ理由50文字以内","recommendation":"推薦理由150文字以内"}]`;
+          const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,messages:[{role:'user',content:prompt}]})});
+          const aiData=await aiRes.json();
+          const aiText=aiData.content&&aiData.content[0]?aiData.content[0].text:'[]';
+          const cleanText=aiText.replace(/```json|```/g,'').trim();
+          const aiArr=JSON.parse(cleanText);
+          enriched=results.map((r,i)=>({...r,matchReason:(aiArr[i]&&aiArr[i].matchReason)||'',recommendation:(aiArr[i]&&aiArr[i].recommendation)||''}));
+        }catch(e){console.error('AI enrich error:',e.message);}
+      }
+      return{statusCode:200,headers,body:JSON.stringify({success:true,companies:enriched})};
     }
 
     if(action==='sendCompanyNames'){
