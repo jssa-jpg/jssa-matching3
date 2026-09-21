@@ -1,0 +1,14 @@
+{
+  "name": "jssa-matching-tool",
+  "version": "1.0.0",
+  "description": "JSSA Matching Tool - AI-powered business matching for JSSA events",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.0.0"
+  },
+  "scripts": {
+    "dev": "netlify dev"
+  }
+}

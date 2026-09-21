@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JSSAエコシステムマッチングツール</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',system-ui,sans-serif;background:#0B0F1A;color:#fff;min-height:100vh}
+.header{background:#0B0F1A;border-bottom:0.5px solid rgba(255,255,255,0.07);padding:0 20px;height:50px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.hlogo{display:flex;align-items:center;gap:8px}
+.hmark{width:26px;height:26px;background:#639922;border-radius:5px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:#fff}
+.htitle{font-size:12px;font-weight:600;color:#fff;letter-spacing:0.02em}
+.hright{display:flex;align-items:center;gap:10px}
+.hcounter{font-size:11px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:4px}
+.hcdot{width:5px;height:5px;border-radius:50%;background:#639922;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.huser{font-size:11px;color:rgba(255,255,255,0.55);display:flex;align-items:center;gap:4px}
+.hero{padding:20px 16px 14px;text-align:center}
+.hero-catch{font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.5px;margin-bottom:7px;line-height:1.3}
+.hero-catch span{color:#97C459}
+.hero-desc{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.7;margin-bottom:10px}
+.hero-desc strong{color:rgba(255,255,255,0.7);font-weight:500}
+.hero-stats{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.stat-pill{background:rgba(99,153,34,0.12);border:0.5px solid rgba(99,153,34,0.25);border-radius:20px;padding:3px 12px;font-size:11px;color:#97C459;font-weight:500}
+.stat-pill strong{color:#C0DD97}
+.form-card{background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.09);border-radius:16px;margin:10px 16px 0;padding:14px}
+.form-title{font-size:11px;font-weight:600;color:#97C459;letter-spacing:0.08em;text-transform:uppercase;display:flex;align-items:center;gap:5px;margin-bottom:11px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.frow{display:flex;flex-direction:column;gap:3px}
+.flabel{font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:3px;flex-wrap:wrap;line-height:1.4}
+.flabel.req{color:rgba(255,255,255,0.55)}
+.flabel.opt{color:rgba(255,255,255,0.32)}
+.rb{background:#C55A11;color:#fff;font-size:7px;font-weight:700;padding:1px 3px;border-radius:2px}
+.ob{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.3);font-size:7px;font-weight:600;padding:1px 3px;border-radius:2px}
+.mb{background:rgba(99,153,34,0.2);color:#97C459;font-size:7px;font-weight:600;padding:1px 3px;border-radius:2px}
+.fsel{width:100%;background:rgba(255,255,255,0.07);border:0.5px solid rgba(255,255,255,0.12);border-radius:7px;padding:7px 8px;font-size:11px;color:#fff;outline:none;appearance:none;cursor:pointer;height:34px}
+.fsel.rf{border-color:rgba(197,90,17,0.5)}
+.fsel option{background:#1a2030;color:#fff}
+.ms-wrap{position:relative}
+.ms-btn{width:100%;background:rgba(255,255,255,0.07);border:0.5px solid rgba(255,255,255,0.12);border-radius:7px;padding:0 8px;font-size:11px;color:rgba(255,255,255,0.45);outline:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:4px;height:34px;transition:border-color .15s}
+.ms-btn.rf{border-color:rgba(197,90,17,0.5)}
+.ms-btn.open{border-color:#639922;border-radius:7px 7px 0 0}
+.ms-btn.has-val{color:#fff}
+.ms-btn i{font-size:11px;color:rgba(255,255,255,0.3);flex-shrink:0;transition:transform .15s}
+.ms-btn.open i{transform:rotate(180deg)}
+.ms-txt{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;text-align:left}
+.ms-dd{display:none;position:absolute;top:100%;left:0;right:0;background:#1C2433;border:0.5px solid #639922;border-top:none;border-radius:0 0 7px 7px;z-index:200;max-height:160px;overflow-y:auto}
+.ms-dd.open{display:block}
+.ms-opt{display:flex;align-items:center;gap:7px;padding:6px 8px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.7)}
+.ms-opt:hover{background:rgba(99,153,34,0.1)}
+.ms-opt input{accent-color:#639922;width:12px;height:12px;flex-shrink:0}
+.ms-opt.ck{color:#fff;background:rgba(99,153,34,0.08)}
+.err{font-size:10px;color:#E24B4A;margin:7px 16px 0;display:none;align-items:center;gap:4px}
+.err.show{display:flex}
+.sub-area{margin:10px 16px 0;display:flex;gap:8px}
+.sub-btn{flex:1;background:#639922;border:none;border-radius:8px;padding:12px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.sub-btn:hover{background:#3B6D11}
+.rst-btn{background:rgba(255,255,255,0.05);border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px 14px;font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;white-space:nowrap}
+.remaining{text-align:center;font-size:11px;color:rgba(255,255,255,0.4);margin:8px 0 0}
+.remaining span{color:#97C459;font-weight:600}
+.res-sec{background:#F7F8FA;margin-top:14px;padding:12px 14px;display:none}
+.res-sec.show{display:block}
+.res-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.rmeta{font-size:12px;color:#6B7280}
+.rmeta strong{color:#111}
+.cards{display:flex;flex-direction:column;gap:8px}
+.card{background:#fff;border:0.5px solid #E5E7EB;border-radius:10px;padding:12px;transition:border-color .15s}
+.card:hover{border-color:#97C459}
+.ctop{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:5px}
+.cico{width:32px;height:32px;border-radius:6px;background:#0B0F1A;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.cco{font-size:13px;font-weight:600;color:#111;margin-bottom:1px;line-height:1.3}
+.crole{font-size:10px;color:#6B7280;margin-bottom:5px}
+.ctags{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px}
+.tag{font-size:9px;padding:1px 5px;border-radius:8px;font-weight:500}
+.ti{background:#EAF3DE;color:#3B6D11}
+.tr{background:#E6F1FB;color:#185FA5}
+.tl{background:#FAEEDA;color:#854F0B}
+.cmeta{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding-top:5px;border-top:0.5px solid #F3F4F6;margin-bottom:5px}
+.mi{font-size:9px;color:#9CA3AF}
+.mv{font-size:10px;color:#374151;font-weight:500}
+.marow{padding:3px 0 6px;border-bottom:0.5px solid #F3F4F6;margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.malbl{font-size:9px;color:#9CA3AF;white-space:nowrap}
+.matxt{font-size:10px;color:#374151;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.manone{font-size:10px;color:#D1D5DB}
+.rank-no{background:#639922;color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px}
+.score-bar{height:4px;background:#E5E7EB;border-radius:2px;margin-bottom:6px}
+.score-fill{height:100%;background:#639922;border-radius:2px}
+.meet-btn{width:100%;background:#0B0F1A;border:none;border-radius:6px;padding:7px;font-size:11px;font-weight:600;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;transition:background .15s}
+.meet-btn:hover{background:#639922}
+.meet-btn:disabled{background:#9CA3AF;cursor:not-allowed}
+.pgn{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:12px;padding-top:10px;border-top:0.5px solid #E5E7EB}
+.pginfo{font-size:10px;color:#9CA3AF}
+.nxtbtn{background:#0B0F1A;border:none;border-radius:6px;padding:7px 12px;font-size:10px;font-weight:600;color:#fff;cursor:pointer;display:flex;align-items:center;gap:4px}
+.prvbtn{background:#fff;border:0.5px solid #E5E7EB;border-radius:6px;padding:7px 10px;font-size:10px;color:#6B7280;cursor:pointer}
+.prvbtn:disabled,.nxtbtn:disabled{opacity:.35;cursor:default}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(11,15,26,0.8);z-index:1000;align-items:flex-end;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:480px;overflow:hidden;max-height:90vh;overflow-y:auto}
+.mhdr{background:#0B0F1A;padding:16px 18px;display:flex;align-items:flex-start;justify-content:space-between}
+.mtag{font-size:9px;font-weight:600;color:#97C459;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px}
+.mtitle{font-size:15px;font-weight:700;color:#fff;line-height:1.3}
+.msub{font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px}
+.close-btn{background:rgba(255,255,255,0.08);border:none;border-radius:6px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;flex-shrink:0}
+.tcard{margin:14px 16px 0;background:#F7F8FA;border:0.5px solid #E5E7EB;border-radius:9px;padding:10px 12px;display:flex;align-items:center;gap:10px}
+.ticon{width:34px;height:34px;background:#0B0F1A;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.tco{font-size:12px;font-weight:600;color:#111}
+.trole{font-size:10px;color:#9CA3AF;margin-top:1px}
+.fbody{padding:14px 16px}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:11px;font-weight:500;color:#6B7280;margin-bottom:4px}
+.field select,.field textarea{width:100%;background:#F9FAFB;border:0.5px solid #E5E7EB;border-radius:7px;padding:8px 10px;font-size:12px;color:#111;outline:none;font-family:inherit;resize:none}
+.field select:focus,.field textarea:focus{border-color:#639922}
+.ccount{text-align:right;font-size:10px;color:#9CA3AF;margin-top:3px}
+.fromcard{background:#F0F9E8;border:0.5px solid #C0DD97;border-radius:9px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.ficon{width:28px;height:28px;background:#639922;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+.fname{font-size:12px;font-weight:600;color:#27500A}
+.fco{font-size:10px;color:#3B6D11;margin-top:1px}
+.fnote{font-size:9px;color:#639922;margin-top:2px}
+.mfooter{padding:0 16px 20px;display:flex;gap:8px}
+.cancel-btn{flex:1;background:#fff;border:0.5px solid #E5E7EB;border-radius:8px;padding:10px;font-size:12px;font-weight:500;color:#6B7280;cursor:pointer}
+.send-btn{flex:2;background:#639922;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px}
+.send-btn:hover{background:#3B6D11}
+.loading{text-align:center;padding:40px;color:#6B7280;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="header">
+  <div class="hlogo">
+    <div class="hmark">J</div>
+    <div class="htitle">JSSAエコシステムマッチングツール</div>
+  </div>
+  <div class="hright">
+  <div class="hcounter"><span class="hcdot"></span>累計 <strong id="counter-val" style="color:rgba(255,255,255,0.6);margin:0 2px">---</strong> アクセス</div>
+  <div class="huser"><i class="ti ti-user" style="font-size:13px"></i><span id="user-name"></span></div>
+  <button onclick="logout()" style="background:rgba(255,255,255,0.08);border:0.5px solid rgba(255,255,255,0.15);border-radius:6px;padding:4px 10px;font-size:11px;color:rgba(255,255,255,0.5);cursor:pointer;">ログアウト</button>
+</div>
+
+<div class="hero">
+  <div class="hero-catch">最適な出会いを<span>AIが見つける</span></div>
+  <div class="hero-desc">アンケートに回答するだけで、過去10年間の協会イベント参加者・岡代表と名刺交換された方から<strong>マッチ度の高い上位10社</strong>を厳選します。</div>
+  <div class="hero-stats">
+    <span class="stat-pill"><strong id="total-count">---</strong>人のビッグデータから分析</span>
+    <span class="stat-pill">過去10年のイベント参加者網羅</span>
+  </div>
+</div>
+
+<div class="form-card">
+  <div class="form-title"><i class="ti ti-wand" style="font-size:12px"></i>マッチングアンケート（10項目）</div>
+  <div class="form-grid">
+    <div class="frow">
+      <span class="flabel req">① 業種 <span class="rb">必須</span><span class="mb">複数可</span></span>
+      <div class="ms-wrap" id="ms1">
+        <button type="button" class="ms-btn rf" id="ms1-b" onclick="tog('ms1')"><span class="ms-txt" id="ms1-t">選択してください</span><i class="ti ti-chevron-down"></i></button>
+        <div class="ms-dd" id="ms1-d">
+          <label class="ms-opt"><input type="checkbox" value="VC・CVC・エンジェル・投資事業" onchange="upd('ms1')">VC・CVC・エンジェル・投資事業</label>
+          <label class="ms-opt"><input type="checkbox" value="M&A仲介会社・FA" onchange="upd('ms1')">M&A仲介会社・FA</label>
+          <label class="ms-opt"><input type="checkbox" value="コンサルタント・士業・監査法人" onchange="upd('ms1')">コンサルタント・士業・監査法人</label>
+          <label class="ms-opt"><input type="checkbox" value="金融・保険・証券代行" onchange="upd('ms1')">金融・保険・証券代行</label>
+          <label class="ms-opt"><input type="checkbox" value="教育・研究機関・学校法人" onchange="upd('ms1')">教育・研究機関・学校法人</label>
+          <label class="ms-opt"><input type="checkbox" value="官公庁・自治体・各種団体等" onchange="upd('ms1')">官公庁・自治体・各種団体等</label>
+          <label class="ms-opt"><input type="checkbox" value="ITサービス・AI・通信・Web3" onchange="upd('ms1')">ITサービス・AI・通信・Web3</label>
+          <label class="ms-opt"><input type="checkbox" value="人材・HR系サービス" onchange="upd('ms1')">人材・HR系サービス</label>
+          <label class="ms-opt"><input type="checkbox" value="製造業・食品・環境・エネルギー・バイオ・宇宙・農林水産" onchange="upd('ms1')">製造業・食品・環境・エネルギー等</label>
+          <label class="ms-opt"><input type="checkbox" value="観光・エンタメ・スポーツ・アート" onchange="upd('ms1')">観光・エンタメ・スポーツ・アート</label>
+          <label class="ms-opt"><input type="checkbox" value="医療・ヘルスケア・福祉・保育・シニア" onchange="upd('ms1')">医療・ヘルスケア・福祉・保育等</label>
+          <label class="ms-opt"><input type="checkbox" value="商社・流通・小売・EC" onchange="upd('ms1')">商社・流通・小売・EC</label>
+          <label class="ms-opt"><input type="checkbox" value="建設・不動産" onchange="upd('ms1')">建設・不動産</label>
+          <label class="ms-opt"><input type="checkbox" value="広告・メディア・出版" onchange="upd('ms1')">広告・メディア・出版</label>
+        </div>
+      </div>
+    </div>
+    <div class="frow">
+      <span class="flabel req">② 上場/未上場 <span class="rb">必須</span></span>
+      <select class="fsel rf" id="f2"><option value="">選択してください</option><option>上場企業のみ</option><option>未上場のみ</option></select>
+    </div>
+    <div class="frow">
+      <span class="flabel req">③ 企業規模 <span class="rb">必須</span><span class="mb">複数可</span></span>
+      <div class="ms-wrap" id="ms3">
+        <button type="button" class="ms-btn rf" id="ms3-b" onclick="tog('ms3')"><span class="ms-txt" id="ms3-t">選択してください</span><i class="ti ti-chevron-down"></i></button>
+        <div class="ms-dd" id="ms3-d">
+          <label class="ms-opt"><input type="checkbox" value="EP" onchange="upd('ms3')">EP（500名以上・大手企業）</label>
+          <label class="ms-opt"><input type="checkbox" value="MID" onchange="upd('ms3')">MID（50〜500名・中堅企業）</label>
+          <label class="ms-opt"><input type="checkbox" value="SMB" onchange="upd('ms3')">SMB（50名以下・スタートアップ）</label>
+        </div>
+      </div>
+    </div>
+    <div class="frow">
+      <span class="flabel req">④ 役職クラス <span class="rb">必須</span><span class="mb">複数可</span></span>
+      <div class="ms-wrap" id="ms4">
+        <button type="button" class="ms-btn rf" id="ms4-b" onclick="tog('ms4')"><span class="ms-txt" id="ms4-t">選択してください</span><i class="ti ti-chevron-down"></i></button>
+        <div class="ms-dd" id="ms4-d">
+          <label class="ms-opt"><input type="checkbox" value="こだわらない" onchange="upd('ms4')">こだわらない</label>
+          <label class="ms-opt"><input type="checkbox" value="経営者・役員" onchange="upd('ms4')">経営者・役員</label>
+          <label class="ms-opt"><input type="checkbox" value="事業部長・本部長" onchange="upd('ms4')">事業部長・本部長</label>
+          <label class="ms-opt"><input type="checkbox" value="部長・次長" onchange="upd('ms4')">部長・次長</label>
+          <label class="ms-opt"><input type="checkbox" value="課長・マネージャー" onchange="upd('ms4')">課長・マネージャー</label>
+          <label class="ms-opt"><input type="checkbox" value="係長・リーダー・主任" onchange="upd('ms4')">係長・リーダー・主任</label>
+          <label class="ms-opt"><input type="checkbox" value="一般社員" onchange="upd('ms4')">一般社員</label>
+          <label class="ms-opt"><input type="checkbox" value="専門職・コンサルタント・研究職など" onchange="upd('ms4')">専門職・コンサルタント・研究職</label>
+        </div>
+      </div>
+    </div>
+    <div class="frow">
+      <span class="flabel opt">⑤ 設立年数 <span class="ob">任意</span><span class="mb">複数可</span></span>
+      <div class="ms-wrap" id="ms5">
+        <button type="button" class="ms-btn" id="ms5-b" onclick="tog('ms5')"><span class="ms-txt" id="ms5-t">こだわらない</span><i class="ti ti-chevron-down"></i></button>
+        <div class="ms-dd" id="ms5-d">
+          <label class="ms-opt"><input type="checkbox" value="1年以内" onchange="upd('ms5')">1年以内</label>
+          <label class="ms-opt"><input type="checkbox" value="2年以内" onchange="upd('ms5')">2年以内</label>
+          <label class="ms-opt"><input type="checkbox" value="3年以内" onchange="upd('ms5')">3年以内</label>
+          <label class="ms-opt"><input type="checkbox" value="5年以内" onchange="upd('ms5')">5年以内</label>
+          <label class="ms-opt"><input type="checkbox" value="10年以内" onchange="upd('ms5')">10年以内</label>
+          <label class="ms-opt"><input type="checkbox" value="10年以上" onchange="upd('ms5')">10年以上</label>
+        </div>
+      </div>
+    </div>
+    <div class="frow">
+      <span class="flabel opt">⑥ 資本金 <span class="ob">任意</span><span class="mb">複数可</span></span>
+      <div class="ms-wrap" id="ms6">
+        <button type="button" class="ms-btn" id="ms6-b" onclick="tog('ms6')"><span class="ms-btn" id="ms6-b" onclick="tog('ms6')"><span class="ms-txt" id="ms6-t">こだわらない</span><i class="ti ti-chevron-down"></i></button>
+        <div class="ms-dd" id="ms6-d">
+          <label class="ms-opt"><input type="checkbox" value="〜1000万円" onchange="upd('ms6')">〜1,000万円</label>
+          <label class="ms-opt"><input type="checkbox" value="〜5000万円" onchange="upd('ms6')">〜5,000万円</label>
+          <label class="ms-opt"><input type="checkbox" value="〜1億円" onchange="upd('ms6')">〜1億円</label>
+          <label class="ms-opt"><input type="checkbox" value="〜5億円" onchange="upd('ms6')">〜5億円</label>
+          <label class="ms-opt"><input type="checkbox" value="〜10億円" onchange="upd('ms6')">〜10億円</label>
+          <label class="ms-opt"><input type="checkbox" value="10億円〜" onchange="upd('ms6')">10億円〜</label>
+        </div>
+      </div>
+    </div>
+    <div class="frow">
+      <span class="flabel opt">⑦ 従業員数 <span class="ob">任意</span><span class="mb">複数可</span></span>
+      <div class="ms-wrap" id="ms7">
+        <button type="button" class="ms-btn" id="ms7-b" onclick="tog('ms7')"><span class="ms-txt" id="ms7-t">こだわらない</span><i class="ti ti-chevron-down"></i></button>
+        <div class="ms-dd" id="ms7-d">
+          <label class="ms-opt"><input type="checkbox" value="〜5名" onchange="upd('ms7')">〜5名</label>
+          <label class="ms-opt"><input type="checkbox" value="〜10名" onchange="upd('ms7')">〜10名</label>
+          <label class="ms-opt"><input type="checkbox" value="〜30名" onchange="upd('ms7')">〜30名</label>
+          <label class="ms-opt"><input type="checkbox" value="〜50名" onchange="upd('ms7')">〜50名</label>
+          <label class="ms-opt"><input type="checkbox" value="〜100名" onchange="upd('ms7')">〜100名</label>
+          <label class="ms-opt"><input type="checkbox" value="〜500名" onchange="upd('ms7')">〜500名</label>
+          <label class="ms-opt"><input type="checkbox" value="500名〜" onchange="upd('ms7')">500名〜</label>
+        </div>
+      </div>
+    </div>
+    <div class="frow">
+      <span class="flabel opt">⑧ 年間採用人数 <span class="ob">任意</span><span class="mb">複数可</span></span>
+      <div class="ms-wrap" id="ms8">
+        <button type="button" class="ms-btn" id="ms8-b" onclick="tog('ms8')"><span class="ms-txt" id="ms8-t">こだわらない</span><i class="ti ti-chevron-down"></i></button>
+        <div class="ms-dd" id="ms8-d">
+          <label class="ms-opt"><input type="checkbox" value="0名" onchange="upd('ms8')">0名（採用なし）</label>
+          <label class="ms-opt"><input type="checkbox" value="〜5名" onchange="upd('ms8')">〜5名</label>
+          <label class="ms-opt"><input type="checkbox" value="〜10名" onchange="upd('ms8')">〜10名</label>
+          <label class="ms-opt"><input type="checkbox" value="〜50名" onchange="upd('ms8')">〜50名</label>
+          <label class="ms-opt"><input type="checkbox" value="〜100名" onchange="upd('ms8')">〜100名</label>
+          <label class="ms-opt"><input type="checkbox" value="100名〜" onchange="upd('ms8')">100名〜</label>
+        </div>
+      </div>
+    </div>
+    <div class="frow">
+      <span class="flabel opt">⑨ M&A実績 <span class="ob">任意</span></span>
+      <select class="fsel" id="f9"><option value="">こだわらない</option><option>あり</option><option>なし</option></select>
+    </div>
+    <div class="frow">
+      <span class="flabel opt">⑩ 地域 <span class="ob">任意</span><span class="mb">複数可</span></span>
+      <div class="ms-wrap" id="ms10">
+        <button type="button" class="ms-btn" id="ms10-b" onclick="tog('ms10')"><span class="ms-txt" id="ms10-t">こだわらない（全国）</span><i class="ti ti-chevron-down"></i></button>
+        <div class="ms-dd" id="ms10-d">
+          <label class="ms-opt"><input type="checkbox" value="北海道" onchange="upd('ms10')">北海道</label>
+          <label class="ms-opt"><input type="checkbox" value="東北" onchange="upd('ms10')">東北</label>
+          <label class="ms-opt"><input type="checkbox" value="関東" onchange="upd('ms10')">関東（東京・神奈川・埼玉・千葉など）</label>
+          <label class="ms-opt"><input type="checkbox" value="東京都のみ" onchange="upd('ms10')">東京都のみ</label>
+          <label class="ms-opt"><input type="checkbox" value="中部" onchange="upd('ms10')">中部（愛知・静岡・岐阜・三重など）</label>
+          <label class="ms-opt"><input type="checkbox" value="関西" onchange="upd('ms10')">関西（大阪・兵庫・京都など）</label>
+          <label class="ms-opt"><input type="checkbox" value="中国・四国" onchange="upd('ms10')">中国・四国</label>
+          <label class="ms-opt"><input type="checkbox" value="九州・沖縄" onchange="upd('ms10')">九州・沖縄</label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="err" id="err"><i class="ti ti-alert-circle" style="font-size:12px"></i>①業種　②上場/未上場　③企業規模　④役職クラス はすべて選択してください</div>
+<div class="sub-area">
+  <button class="sub-btn" onclick="showResults()"><i class="ti ti-sparkles" style="font-size:14px"></i>上位10社を表示する</button>
+  <button class="rst-btn" onclick="resetAll()">リセット</button>
+</div>
+<div class="remaining" id="remaining-area" style="display:none">今月の残りリクエスト：<span id="remaining-count">3</span>名</div>
+
+<div class="res-sec" id="res">
+  <div class="res-bar"><div class="rmeta"><strong id="res-count">0</strong>社 マッチ度順に表示</div></div>
+  <div class="cards" id="cards-area"></div>
+  <div class="pgn">
+    <button class="prvbtn" id="pb" disabled onclick="prevPage()"><i class="ti ti-chevron-left" style="font-size:11px"></i>前の10社</button>
+    <span class="pginfo" id="pi">1〜10社目</span>
+    <button class="nxtbtn" id="nb" onclick="nextPage()"><i class="ti ti-chevron-right" style="font-size:11px"></i>次の10社</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="mhdr">
+      <div>
+        <div class="mtag">面談希望を送る</div>
+        <div class="mtitle" id="modal-company">会社名</div>
+        <div class="msub" id="modal-position">役職</div>
+      </div>
+      <button class="close-btn" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="tcard">
+      <div class="ticon" id="modal-icon">--</div>
+      <div>
+        <div class="tco" id="modal-co2">会社名</div>
+        <div class="trole" id="modal-role2">役職</div>
+      </div>
+    </div>
+    <div class="fbody">
+      <div class="field">
+        <label>面談の目的</label>
+        <select id="modal-purpose">
+          <option value="">目的を選択してください</option>
+          <option>事業提携・アライアンス</option>
+          <option>資金調達・投資相談</option>
+          <option>採用・人材交流</option>
+          <option>販路開拓・営業</option>
+          <option>情報交換・ネットワーキング</option>
+          <option>その他</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>メッセージ（上限300文字）</label>
+        <textarea id="modal-msg" rows="4" maxlength="300" oninput="document.getElementById('modal-cc').textContent=this.value.length+'/300'" placeholder="面談をご希望する背景をご記入ください。"></textarea>
+        <div class="ccount" id="modal-cc">0/300</div>
+      </div>
+      <div class="fromcard">
+        <div class="ficon" id="from-icon">--</div>
+        <div>
+          <div class="fname" id="from-name">氏名</div>
+          <div class="fco" id="from-co">会社名</div>
+          <div class="fnote"><i class="ti ti-check" style="font-size:10px"></i> ログイン情報から自動引用</div>
+        </div>
+      </div>
+    </div>
+    <div class="mfooter">
+      <button class="cancel-btn" onclick="closeModal()">キャンセル</button>
+      <button class="send-btn" onclick="sendRequest()"><i class="ti ti-send" style="font-size:13px"></i>岡代表に送る</button>
+    </div>
+  </div>
+</div>
+<script>
+const jssaUser=sessionStorage.getItem('jssa_user');
+if(!jssaUser){window.location.href='/login';}
+const currentUser=jssaUser?JSON.parse(jssaUser):{};let allResults=[];let pg=0;const PER=10;let remaining=3;let selectedCard=null;
+const reqIds=['ms1','ms3','ms4'];
+
+function tog(id){
+  const dd=document.getElementById(id+'-d');
+  const bt=document.getElementById(id+'-b');
+  const isOpen=dd.classList.contains('open');
+  document.querySelectorAll('.ms-dd.open').forEach(d=>{d.classList.remove('open');d.previousElementSibling.classList.remove('open');});
+  if(!isOpen){dd.classList.add('open');bt.classList.add('open');}
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap')){document.querySelectorAll('.ms-dd.open').forEach(d=>{d.classList.remove('open');d.previousElementSibling.classList.remove('open');});}});
+
+function upd(id){
+  const cks=document.querySelectorAll('#'+id+'-d input:checked');
+  const bt=document.getElementById(id+'-b');
+  const tx=document.getElementById(id+'-t');
+  const vals=Array.from(cks).map(c=>c.value);
+  const isR=reqIds.includes(id);
+  tx.textContent=vals.length===0?(isR?'選択してください':'こだわらない'):vals.length===1?vals[0]:vals.length+'件選択中';
+  bt.classList.toggle('has-val',vals.length>0);
+  document.querySelectorAll('#'+id+'-d .ms-opt').forEach(o=>o.classList.toggle('ck',o.querySelector('input').checked));
+  if(isR)bt.style.borderColor=vals.length>0?'rgba(99,153,34,0.5)':'rgba(197,90,17,0.5)';
+}
+function getMs(id){return Array.from(document.querySelectorAll('#'+id+'-d input:checked')).map(c=>c.value);}
+
+async function showResults(){
+  const f2=document.getElementById('f2').value;
+  const miss=getMs('ms1').length===0||!f2||getMs('ms3').length===0||getMs('ms4').length===0;
+  document.getElementById('err').classList.toggle('show',miss);
+  if(miss)return;
+  const btn=document.querySelector('.sub-btn');
+  btn.textContent='検索中...';btn.disabled=true;
+  try{
+    const res=await fetch('/.netlify/functions/match',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        answers:{
+          industry:getMs('ms1'),
+          listed:f2,
+          scale:getMs('ms3'),
+          position:getMs('ms4'),
+          years:getMs('ms5'),
+          capital:getMs('ms6'),
+          employees:getMs('ms7'),
+          hiring:getMs('ms8'),
+          ma:document.getElementById('f9').value,
+          region:getMs('ms10')
+        },
+        userInfo:{id:currentUser.id||'guest',company:currentUser.company||'ゲスト',name:currentUser.name||'',position:currentUser.position||'',email:currentUser.email||''}
+      })
+    });
+    const data=await res.json();
+    if(!data.success)throw new Error(data.error||'エラーが発生しました');
+    allResults=data.results||[];
+    remaining=data.remainingRequests!==undefined?data.remainingRequests:3;
+    document.getElementById('remaining-count').textContent=remaining;
+    document.getElementById('remaining-area').style.display='block';
+    pg=0;
+    renderCards();
+    document.getElementById('res').classList.add('show');
+    document.getElementById('res').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){
+    alert('エラー: '+e.message);
+  }finally{
+    btn.innerHTML='<i class="ti ti-sparkles" style="font-size:14px"></i>上位10社を表示する';
+    btn.disabled=false;
+  }
+}
+
+function renderCards(){
+  const start=pg*PER;
+  const page=allResults.slice(start,start+PER);
+  document.getElementById('res-count').textContent=allResults.length;
+  document.getElementById('pi').textContent=(start+1)+'〜'+Math.min(start+page.length,allResults.length)+'社目';
+  document.getElementById('pb').disabled=pg===0;
+  document.getElementById('nb').disabled=start+PER>=allResults.length;
+  const area=document.getElementById('cards-area');
+  area.innerHTML=page.map((m,i)=>{
+    const rank=start+i+1;
+    const icon=(m.company||'?').slice(0,2);
+    const ind=m.industry||'';
+    const pref=m.prefecture||'';
+    const listed=m.listed||'';
+    const scale=m.scale||'';
+    const scaleBg=scale==='EP'?'#EAF3DE':scale==='MID'?'#E6F1FB':'#FAEEDA';
+    const scaleCl=scale==='EP'?'#3B6D11':scale==='MID'?'#185FA5':'#854F0B';
+    return `<div class="card">
+      <div class="ctop">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="cico">${icon}</div>
+          <div>
+            <div class="cco">${m.company||''}</div>
+            <div class="crole">${m.position||'役職不明'}</div>
+          </div>
+        </div>
+        <span class="rank-no">${rank}位</span>
+      </div>
+      <div class="ctags">
+        ${ind?`<span class="tag ti">${ind.split('・')[0]}</span>`:''}
+        ${pref?`<span class="tag tr">${pref}</span>`:''}
+        ${listed&&listed!=='-'?`<span class="tag tl">${listed}</span>`:''}
+        ${scale?`<span class="tag" style="background:${scaleBg};color:${scaleCl}">${scale}</span>`:''}
+      </div>
+      <div class="score-bar"><div class="score-fill" style="width:${m.score||0}%"></div></div>
+      <div class="cmeta">
+        <div><div class="mi">従業員</div><div class="mv">${m.employees||'—'}</div></div>
+        <div><div class="mi">設立</div><div class="mv">${m.founded||'—'}</div></div>
+        <div><div class="mi">資本金</div><div class="mv">${m.capital||'—'}</div></div>
+        <div><div class="mi">採用</div><div class="mv">${m.hiring||'—'}</div></div>
+      </div>
+      <div class="marow"><span class="malbl">M&A</span><span class="${m.ma&&m.ma!=='-'&&m.ma!=='実績なし'?'matxt':'manone'}">${m.ma&&m.ma!=='-'?m.ma:'実績なし'}</span></div>
+      ${m.features?`<div style="font-size:10px;color:#6B7280;margin-bottom:8px;line-height:1.5">${m.features}</div>`:''}
+      ${m.matchReason?`<div style="font-size:10px;color:#3B6D11;background:#F0F9E8;padding:6px 8px;border-radius:6px;margin-bottom:6px;line-height:1.5">🎯 ${m.matchReason}</div>`:''}
+      <button class="meet-btn" ${remaining<=0?'disabled':''} onclick="openModal(${JSON.stringify(m).replace(/"/g,'&quot;')})">
+        <i class="ti ti-calendar-plus" style="font-size:11px"></i>${remaining<=0?'今月の上限に達しました':'会いたい'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function prevPage(){if(pg>0){pg--;renderCards();document.getElementById('res').scrollIntoView({behavior:'smooth',block:'start'});}}
+function nextPage(){if((pg+1)*PER<allResults.length){pg++;renderCards();document.getElementById('res').scrollIntoView({behavior:'smooth',block:'start'});}}
+
+function openModal(m){
+  selectedCard=m;
+  document.getElementById('modal-company').textContent=m.company||'';
+  document.getElementById('modal-position').textContent=m.position||'';
+  document.getElementById('modal-icon').textContent=(m.company||'?').slice(0,2);
+  document.getElementById('modal-co2').textContent=m.company||'';
+  document.getElementById('modal-role2').textContent=(m.position||'')+(m.prefecture?' / '+m.prefecture:'');
+  document.getElementById('from-icon').textContent='岡';
+  document.getElementById('from-name').textContent='岡 隆宏';
+  document.getElementById('from-co').textContent='日本スタートアップ支援協会（JSSA）';
+  document.getElementById('modal-msg').value=m.firstMessage||'';
+  document.getElementById('modal-cc').textContent=(m.firstMessage||'').length+'/300';
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+
+async function sendRequest(){
+  const purpose=document.getElementById('modal-purpose').value;
+  const msg=document.getElementById('modal-msg').value;
+  if(!purpose){alert('面談の目的を選択してください');return;}
+  if(!msg.trim()){alert('メッセージを入力してください');return;}
+  const btn=document.querySelector('.send-btn');
+  btn.textContent='送信中...';btn.disabled=true;
+  try{
+    const res=await fetch('/.netlify/functions/save-request',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        userInfo:{id:currentUser.id||'guest',company:currentUser.company||'ゲスト',name:currentUser.name||'',position:currentUser.position||'',email:currentUser.email||''},
+        targetCompany:selectedCard.company,
+        targetPosition:selectedCard.position,
+        matchReason:selectedCard.matchReason||'',
+        recommendation:selectedCard.recommendation||'',
+        firstMessage:msg
+      })
+    });
+    const data=await res.json();
+    if(data.success){
+      remaining=data.remaining!==undefined?data.remaining:remaining-1;
+      document.getElementById('remaining-count').textContent=remaining;
+      closeModal();
+      alert('岡代表に送信しました！');
+      renderCards();
+    }else{
+      alert(data.error||'送信に失敗しました');
+    }
+  }catch(e){
+    alert('エラー: '+e.message);
+  }finally{
+    btn.innerHTML='<i class="ti ti-send" style="font-size:13px"></i>岡代表に送る';
+    btn.disabled=false;
+  }
+}
+function logout(){
+  if(!confirm('ログアウトしますか？'))return;
+  sessionStorage.clear();
+  window.location.href='/login';
+}
+function resetAll(){
+  document.querySelectorAll('.ms-dd input[type=checkbox]').forEach(c=>c.checked=false);
+  ['ms1','ms3','ms4','ms5','ms6','ms7','ms8','ms10'].forEach(id=>{
+    const isR=reqIds.includes(id);
+    document.getElementById(id+'-t').textContent=isR?'選択してください':'こだわらない';
+    document.getElementById(id+'-b').classList.remove('has-val');
+    document.getElementById(id+'-b').style.borderColor=isR?'rgba(197,90,17,0.5)':'';
+    document.querySelectorAll('#'+id+'-d .ms-opt').forEach(o=>o.classList.remove('ck'));
+  });
+  document.getElementById('f2').selectedIndex=0;
+  document.getElementById('f9').selectedIndex=0;
+  document.getElementById('err').classList.remove('show');
+  document.getElementById('res').classList.remove('show');
+  document.getElementById('remaining-area').style.display='none';
+  allResults=[];
+}
+
+// カウンター取得
+fetch('/.netlify/functions/counter').then(r=>r.json()).then(d=>{
+  if(d.count)document.getElementById('counter-val').textContent=Number(d.count).toLocaleString();
+}).catch(()=>{});
+
+// データ総数取得
+fetch('/.netlify/functions/debug?pass=jssa2025').then(r=>r.json()).then(d=>{
+  if(d.total)document.getElementById('total-count').textContent=Number(d.total).toLocaleString();
+  // ユーザー名表示
+if(currentUser.name){
+  document.getElementById('user-name').textContent=currentUser.company+' '+currentUser.name;
+}
+}).catch(()=>{});
+  // 初回プロフィール登録チェック
+const profileDone=sessionStorage.getItem('jssa_profile_done');
+if(!profileDone){
+  setTimeout(()=>{
+    if(confirm('マッチング精度を上げるためにプロフィールを登録しませんか？\n（任意・スキップ可能）')){
+      window.location.href='/profile';
+    }else{
+      sessionStorage.setItem('jssa_profile_done','skip');
+    }
+  },1000);
+}
+</script>
+</body>
+</html>

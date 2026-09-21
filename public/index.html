@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JSSAエコシステムマッチングツール</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0B0F1A;color:#fff;min-height:100vh}
+header{background:#0B0F1A;border-bottom:1px solid rgba(255,255,255,0.1);padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-badge{background:#639922;color:#fff;font-weight:700;font-size:12px;padding:3px 8px;border-radius:4px}
+.logo-title{font-size:13px;font-weight:600;color:#fff}
+.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.counter-text{font-size:11px;color:rgba(255,255,255,0.4)}
+.user-text{font-size:11px;color:rgba(255,255,255,0.6)}
+.mypage-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:4px 10px;font-size:11px;color:rgba(255,255,255,0.6);text-decoration:none}
+.logout-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:4px 10px;font-size:11px;color:rgba(255,255,255,0.6);cursor:pointer}
+.hero{padding:24px 16px 16px;text-align:center}
+.hero h1{font-size:20px;font-weight:700;color:#fff;margin-bottom:8px;line-height:1.4}
+.hero h1 span{color:#97C459}
+.hero p{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:12px}
+.stat-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.stat-badge{background:rgba(99,153,34,0.15);border:1px solid rgba(99,153,34,0.3);border-radius:20px;padding:4px 12px;font-size:11px;color:#97C459}
+.form-wrap{padding:0 16px 16px}
+.form-section{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;margin-bottom:12px}
+.section-label{font-size:11px;font-weight:700;color:#97C459;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:12px}
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+.field-label{font-size:12px;font-weight:600;color:rgba(255,255,255,0.7);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.req-badge{background:#C55A11;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px}
+.opt-badge{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);font-size:9px;font-weight:600;padding:1px 5px;border-radius:3px}
+.multi-badge{background:rgba(99,153,34,0.2);color:#97C459;font-size:9px;font-weight:600;padding:1px 5px;border-radius:3px}
+select{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;outline:none;appearance:none;cursor:pointer}
+select option{background:#1a2030;color:#fff}
+.ms-wrap{position:relative}
+.ms-trigger{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 12px;font-size:13px;color:rgba(255,255,255,0.4);cursor:pointer;display:flex;align-items:center;justify-content:space-between;text-align:left}
+.ms-trigger.selected{color:#fff}
+.ms-trigger.invalid{border-color:#C55A11}
+.ms-trigger.open{border-color:#639922;border-radius:8px 8px 0 0}
+.ms-arrow{font-size:12px;color:rgba(255,255,255,0.3);transition:transform .2s}
+.ms-trigger.open .ms-arrow{transform:rotate(180deg)}
+.ms-dropdown{display:none;position:absolute;top:100%;left:0;right:0;background:#1C2433;border:1px solid #639922;border-top:none;border-radius:0 0 8px 8px;z-index:100;max-height:200px;overflow-y:auto}
+.ms-dropdown.open{display:block}
+.ms-item{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.7)}
+.ms-item:hover{background:rgba(99,153,34,0.1)}
+.ms-item input{accent-color:#639922;width:14px;height:14px;flex-shrink:0}
+.ms-item.checked{color:#fff;background:rgba(99,153,34,0.08)}
+.err-msg{background:rgba(197,90,17,0.15);border:1px solid rgba(197,90,17,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:#E87040;margin-bottom:12px;display:none}
+.err-msg.show{display:block}
+.submit-btn{width:100%;background:#639922;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:8px}
+.submit-btn:hover{background:#3B6D11}
+.submit-btn:disabled{background:#444;cursor:not-allowed}
+.reset-btn{width:100%;background:transparent;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:12px;font-size:13px;color:rgba(255,255,255,0.4);cursor:pointer}
+.remaining-info{text-align:center;margin-top:8px;display:none}
+.results-wrap{background:#f3f4f6;padding:16px}
+.results-header{font-size:13px;color:#374151;margin-bottom:12px}
+.results-header strong{color:#111;font-size:15px}
+.ai-loading{text-align:center;font-size:14px;font-weight:700;color:#dc2626;padding:8px;margin-bottom:8px;display:none}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid #e5e7eb}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
+.card-icon{width:36px;height:36px;background:#0B0F1A;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.card-name{font-size:14px;font-weight:700;color:#111;margin-bottom:2px}
+.card-role{font-size:11px;color:#6B7280}
+.rank-badge{background:#639922;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;flex-shrink:0}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.tag{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500}
+.tag-ind{background:#EAF3DE;color:#3B6D11}
+.tag-reg{background:#E6F1FB;color:#185FA5}
+.tag-lst{background:#FAEEDA;color:#854F0B}
+.tag-ep{background:#EAF3DE;color:#3B6D11}
+.tag-mid{background:#E6F1FB;color:#185FA5}
+.tag-smb{background:#FAEEDA;color:#854F0B}
+.score-wrap{margin-bottom:8px}
+.score-bar{height:5px;background:#E5E7EB;border-radius:3px;margin-top:4px}
+.score-fill{height:100%;background:#639922;border-radius:3px}
+.meta-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin-bottom:8px;background:#F9FAFB;border-radius:8px;padding:8px}
+.meta-item .label{font-size:10px;color:#9CA3AF}
+.meta-item .value{font-size:12px;color:#374151;font-weight:500}
+.features-text{font-size:11px;color:#6B7280;line-height:1.6;margin-bottom:8px}
+.match-reason{font-size:11px;color:#3B6D11;background:#F0F9E8;padding:8px 10px;border-radius:6px;margin-bottom:8px;line-height:1.5}
+.recommendation-box{font-size:11px;color:#185FA5;background:#E6F1FB;padding:8px 10px;border-radius:6px;margin-bottom:8px;line-height:1.5}
+.recommendation-box strong{display:block;margin-bottom:4px;font-size:10px;color:#185FA5}
+.fav-btn{width:100%;border-radius:8px;padding:8px;font-size:12px;cursor:pointer;margin-bottom:6px;font-family:inherit;transition:all .15s}
+.meet-btn{width:100%;background:#0B0F1A;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit}
+.meet-btn:hover{background:#639922}
+.meet-btn:disabled{background:#9CA3AF;cursor:not-allowed}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:flex-end;justify-content:center}
+.modal-bg.show{display:flex}
+.modal-box{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:500px;max-height:90vh;overflow-y:auto}
+.modal-head{background:#0B0F1A;padding:16px 20px;border-radius:20px 20px 0 0;display:flex;justify-content:space-between;align-items:flex-start}
+.modal-title{font-size:15px;font-weight:700;color:#fff}
+.modal-sub{font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px}
+.modal-close{background:rgba(255,255,255,0.1);border:none;border-radius:6px;width:28px;height:28px;color:rgba(255,255,255,0.6);cursor:pointer;font-size:16px}
+.modal-body{padding:16px 20px}
+.modal-field{margin-bottom:14px}
+.modal-field label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}
+.modal-field select,.modal-field textarea{width:100%;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;font-size:13px;color:#111;outline:none;font-family:inherit;resize:none;background:#F9FAFB}
+.modal-field select:focus,.modal-field textarea:focus{border-color:#639922}
+.char-count{text-align:right;font-size:10px;color:#9CA3AF;margin-top:3px}
+.from-card{background:#F0F9E8;border:1px solid #C0DD97;border-radius:8px;padding:10px 12px;margin-bottom:14px}
+.from-label{font-size:10px;color:#639922;font-weight:700;margin-bottom:4px}
+.modal-footer{padding:0 20px 24px;display:flex;gap:10px}
+.modal-cancel{flex:1;background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:12px;font-size:13px;color:#6B7280;cursor:pointer}
+.modal-send{flex:2;background:#639922;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;color:#fff;cursor:pointer}
+.modal-send:hover{background:#3B6D11}
+.modal-send:disabled{background:#9CA3AF;cursor:not-allowed}
+.pgn{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px}
+.pgn-info{font-size:11px;color:#9CA3AF}
+.pgn-btn{background:#0B0F1A;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;color:#fff;cursor:pointer}
+.pgn-btn:disabled{opacity:0.3;cursor:default}
+.hero,.form-wrap,#results-section .results-wrap{max-width:480px;margin-left:auto;margin-right:auto}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <span class="logo-badge">JSSA</span>
+    <span class="logo-title">エコシステムマッチング</span>
+  </div>
+  <div class="header-right">
+    <span class="counter-text">累計 <strong id="counter-val" style="color:#97C459">---</strong> アクセス</span>
+    <span class="user-text" id="user-name"></span>
+    <a href="/mypage" class="mypage-btn">マイページ</a>
+    <button class="logout-btn" onclick="logout()">ログアウト</button>
+  </div>
+</header>
+<div class="hero">
+  <h1>最適な出会いを<span>AIが見つける</span></h1>
+  <p>アンケートに回答すると、過去10年間の協会イベント参加者・岡代表と名刺交換された方の中からAIがマッチ度の高い企業を選定します。マッチング結果は岡代表が内容を確認したうえで、企業名のみメールにてご案内いたします。</p>
+  <div class="stat-row">
+    <span class="stat-badge"><strong id="total-count">---</strong>人のビッグデータから分析</span>
+    <span class="stat-badge">過去10年のイベント参加者網羅</span>
+  </div>
+</div>
+<div class="form-wrap">
+  <div class="form-section">
+    <div class="section-label">マッチングアンケート（必須項目）</div>
+    <div class="field">
+      <div class="field-label">① 業種 <span class="req-badge">必須</span> <span class="multi-badge">複数可</span></div>
+      <div class="ms-wrap" id="ms1">
+        <button type="button" class="ms-trigger invalid" id="ms1-btn" onclick="toggleMs('ms1')"><span id="ms1-text">選択してください</span><span class="ms-arrow">▾</span></button>
+        <div class="ms-dropdown" id="ms1-drop">
+          <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms1',this.value)">こだわらない</label>
+          <label class="ms-item"><input type="checkbox" value="VC・CVC・エンジェル・投資事業" onchange="updateMs('ms1',this.value)">VC・CVC・エンジェル・投資事業</label>
+          <label class="ms-item"><input type="checkbox" value="M&A仲介会社・FA" onchange="updateMs('ms1',this.value)">M&A仲介会社・FA</label>
+          <label class="ms-item"><input type="checkbox" value="コンサルタント・士業・監査法人" onchange="updateMs('ms1',this.value)">コンサルタント・士業・監査法人</label>
+          <label class="ms-item"><input type="checkbox" value="金融・保険・証券代行" onchange="updateMs('ms1',this.value)">金融・保険・証券代行</label>
+          <label class="ms-item"><input type="checkbox" value="教育・研究機関・学校法人" onchange="updateMs('ms1',this.value)">教育・研究機関・学校法人</label>
+          <label class="ms-item"><input type="checkbox" value="官公庁・自治体・各種団体等" onchange="updateMs('ms1',this.value)">官公庁・自治体・各種団体等</label>
+          <label class="ms-item"><input type="checkbox" value="ITサービス・AI・通信・Web3" onchange="updateMs('ms1',this.value)">ITサービス・AI・通信・Web3</label>
+          <label class="ms-item"><input type="checkbox" value="人材・HR系サービス" onchange="updateMs('ms1',this.value)">人材・HR系サービス</label>
+          <label class="ms-item"><input type="checkbox" value="製造業・食品・環境・エネルギー・バイオ・宇宙・農林水産" onchange="updateMs('ms1',this.value)">製造業・食品・環境・エネルギー等</label>
+          <label class="ms-item"><input type="checkbox" value="観光・エンタメ・スポーツ・アート" onchange="updateMs('ms1',this.value)">観光・エンタメ・スポーツ・アート</label>
+          <label class="ms-item"><input type="checkbox" value="医療・ヘルスケア・福祉・保育・シニア" onchange="updateMs('ms1',this.value)">医療・ヘルスケア・福祉・保育等</label>
+          <label class="ms-item"><input type="checkbox" value="商社・流通・小売・EC" onchange="updateMs('ms1',this.value)">商社・流通・小売・EC</label>
+          <label class="ms-item"><input type="checkbox" value="建設・不動産" onchange="updateMs('ms1',this.value)">建設・不動産</label>
+          <label class="ms-item"><input type="checkbox" value="広告・メディア・出版" onchange="updateMs('ms1',this.value)">広告・メディア・出版</label>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">② 上場/未上場 <span class="req-badge">必須</span></div>
+      <select id="f-listed"><option value="">選択してください</option><option>こだわらない</option><option>上場企業のみ</option><option>未上場のみ</option></select>
+    </div>
+    <div class="field">
+      <div class="field-label">③ 企業規模 <span class="req-badge">必須</span> <span class="multi-badge">複数可</span></div>
+      <div class="ms-wrap" id="ms3">
+        <button type="button" class="ms-trigger invalid" id="ms3-btn" onclick="toggleMs('ms3')"><span id="ms3-text">選択してください</span><span class="ms-arrow">▾</span></button>
+        <div class="ms-dropdown" id="ms3-drop">
+          <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms3',this.value)">こだわらない</label>
+          <label class="ms-item"><input type="checkbox" value="EP" onchange="updateMs('ms3',this.value)">EP（500名以上・大手企業）</label>
+          <label class="ms-item"><input type="checkbox" value="MID" onchange="updateMs('ms3',this.value)">MID（50〜500名・中堅企業）</label>
+          <label class="ms-item"><input type="checkbox" value="SMB" onchange="updateMs('ms3',this.value)">SMB（50名以下・スタートアップ）</label>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">④ 役職クラス <span class="req-badge">必須</span> <span class="multi-badge">複数可</span></div>
+      <div class="ms-wrap" id="ms4">
+        <button type="button" class="ms-trigger invalid" id="ms4-btn" onclick="toggleMs('ms4')"><span id="ms4-text">選択してください</span><span class="ms-arrow">▾</span></button>
+        <div class="ms-dropdown" id="ms4-drop">
+          <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms4',this.value)">こだわらない</label>
+          <label class="ms-item"><input type="checkbox" value="経営者・役員" onchange="updateMs('ms4',this.value)">経営者・役員</label>
+          <label class="ms-item"><input type="checkbox" value="事業部長・本部長" onchange="updateMs('ms4',this.value)">事業部長・本部長</label>
+          <label class="ms-item"><input type="checkbox" value="部長・次長" onchange="updateMs('ms4',this.value)">部長・次長</label>
+          <label class="ms-item"><input type="checkbox" value="課長・マネージャー" onchange="updateMs('ms4',this.value)">課長・マネージャー</label>
+          <label class="ms-item"><input type="checkbox" value="係長・リーダー・主任" onchange="updateMs('ms4',this.value)">係長・リーダー・主任</label>
+          <label class="ms-item"><input type="checkbox" value="一般社員" onchange="updateMs('ms4',this.value)">一般社員</label>
+          <label class="ms-item"><input type="checkbox" value="専門職・コンサルタント・研究職など" onchange="updateMs('ms4',this.value)">専門職・コンサルタント・研究職</label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="form-section">
+    <div class="section-label">任意項目（精度向上）</div>
+    <div class="field">
+      <div class="field-label">⑤ 設立年数 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="ms-wrap" id="ms5">
+        <button type="button" class="ms-trigger" id="ms5-btn" onclick="toggleMs('ms5')"><span id="ms5-text">こだわらない</span><span class="ms-arrow">▾</span></button>
+        <div class="ms-dropdown" id="ms5-drop">
+          <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms5',this.value)">こだわらない</label>
+          <label class="ms-item"><input type="checkbox" value="1年以内" onchange="updateMs('ms5',this.value)">1年以内</label>
+          <label class="ms-item"><input type="checkbox" value="2年以内" onchange="updateMs('ms5',this.value)">2年以内</label>
+          <label class="ms-item"><input type="checkbox" value="3年以内" onchange="updateMs('ms5',this.value)">3年以内</label>
+          <label class="ms-item"><input type="checkbox" value="5年以内" onchange="updateMs('ms5',this.value)">5年以内</label>
+          <label class="ms-item"><input type="checkbox" value="10年以内" onchange="updateMs('ms5',this.value)">10年以内</label>
+          <label class="ms-item"><input type="checkbox" value="10年以上" onchange="updateMs('ms5',this.value)">10年以上</label>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">⑥ 資本金 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="ms-wrap" id="ms6">
+        <button type="button" class="ms-trigger" id="ms6-btn" onclick="toggleMs('ms6')"><span id="ms6-text">こだわらない</span><span class="ms-arrow">▾</span></button>
+        <div class="ms-dropdown" id="ms6-drop">
+          <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms6',this.value)">こだわらない</label>
+          <label class="ms-item"><input type="checkbox" value="〜1000万円" onchange="updateMs('ms6',this.value)">〜1,000万円</label>
+          <label class="ms-item"><input type="checkbox" value="〜5000万円" onchange="updateMs('ms6',this.value)">〜5,000万円</label>
+          <label class="ms-item"><input type="checkbox" value="〜1億円" onchange="updateMs('ms6',this.value)">〜1億円</label>
+          <label class="ms-item"><input type="checkbox" value="〜5億円" onchange="updateMs('ms6',this.value)">〜5億円</label>
+          <label class="ms-item"><input type="checkbox" value="〜10億円" onchange="updateMs('ms6',this.value)">〜10億円</label>
+          <label class="ms-item"><input type="checkbox" value="10億円〜" onchange="updateMs('ms6',this.value)">10億円〜</label>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">⑦ 従業員数 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="ms-wrap" id="ms7">
+        <button type="button" class="ms-trigger" id="ms7-btn" onclick="toggleMs('ms7')"><span id="ms7-text">こだわらない</span><span class="ms-arrow">▾</span></button>
+        <div class="ms-dropdown" id="ms7-drop">
+          <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms7',this.value)">こだわらない</label>
+          <label class="ms-item"><input type="checkbox" value="〜5名" onchange="updateMs('ms7',this.value)">〜5名</label>
+          <label class="ms-item"><input type="checkbox" value="〜10名" onchange="updateMs('ms7',this.value)">〜10名</label>
+          <label class="ms-item"><input type="checkbox" value="〜30名" onchange="updateMs('ms7',this.value)">〜30名</label>
+          <label class="ms-item"><input type="checkbox" value="〜50名" onchange="updateMs('ms7',this.value)">〜50名</label>
+          <label class="ms-item"><input type="checkbox" value="〜100名" onchange="updateMs('ms7',this.value)">〜100名</label>
+          <label class="ms-item"><input type="checkbox" value="〜500名" onchange="updateMs('ms7',this.value)">〜500名</label>
+          <label class="ms-item"><input type="checkbox" value="500名〜" onchange="updateMs('ms7',this.value)">500名〜</label>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">⑧ 年間採用人数 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="ms-wrap" id="ms8">
+        <button type="button" class="ms-trigger" id="ms8-btn" onclick="toggleMs('ms8')"><span id="ms8-text">こだわらない</span><span class="ms-arrow">▾</span></button>
+        <div class="ms-dropdown" id="ms8-drop">
+          <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms8',this.value)">こだわらない</label>
+        
+          <label class="ms-item"><input type="checkbox" value="〜5名" onchange="updateMs('ms8',this.value)">〜5名</label>
+          <label class="ms-item"><input type="checkbox" value="〜10名" onchange="updateMs('ms8',this.value)">〜10名</label>
+          <label class="ms-item"><input type="checkbox" value="〜50名" onchange="updateMs('ms8',this.value)">〜50名</label>
+          <label class="ms-item"><input type="checkbox" value="〜100名" onchange="updateMs('ms8',this.value)">〜100名</label>
+          <label class="ms-item"><input type="checkbox" value="100名〜" onchange="updateMs('ms8',this.value)">100名〜</label>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">⑨ M&amp;A実績 <span class="opt-badge">任意</span></div>
+      <select id="f-ma"><option value="">こだわらない</option><option>あり</option><option>なし</option></select>
+    </div>
+    <div class="field">
+      <div class="field-label">⑩ 地域 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="ms-wrap" id="ms10">
+        <button type="button" class="ms-trigger" id="ms10-btn" onclick="toggleMs('ms10')"><span id="ms10-text">こだわらない（全国）</span><span class="ms-arrow">▾</span></button>
+        <div class="ms-dropdown" id="ms10-drop">
+          <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms10',this.value)">こだわらない（全国）</label>
+          <label class="ms-item"><input type="checkbox" value="北海道" onchange="updateMs('ms10',this.value)">北海道</label>
+          <label class="ms-item"><input type="checkbox" value="東北" onchange="updateMs('ms10',this.value)">東北</label>
+          <label class="ms-item"><input type="checkbox" value="関東" onchange="updateMs('ms10',this.value)">関東（東京・神奈川・埼玉・千葉など）</label>
+          <label class="ms-item"><input type="checkbox" value="東京都のみ" onchange="updateMs('ms10',this.value)">東京都のみ</label>
+          <label class="ms-item"><input type="checkbox" value="中部" onchange="updateMs('ms10',this.value)">中部（愛知・静岡・岐阜・三重など）</label>
+          <label class="ms-item"><input type="checkbox" value="関西" onchange="updateMs('ms10',this.value)">関西（大阪・兵庫・京都など）</label>
+          <label class="ms-item"><input type="checkbox" value="中国・四国" onchange="updateMs('ms10',this.value)">中国・四国</label>
+          <label class="ms-item"><input type="checkbox" value="九州・沖縄" onchange="updateMs('ms10',this.value)">九州・沖縄</label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="err-msg" id="err-msg">①業種・②上場/未上場・③企業規模・④役職クラス はすべて選択してください</div>
+  <button class="submit-btn" id="submit-btn" onclick="doSearch()">✨ マッチングを申し込む</button>
+  <button class="reset-btn" onclick="doReset()">リセット</button>
+</div>
+<div id="results-section" style="display:none">
+  <div class="results-wrap" style="text-align:center;padding:32px 16px">
+    <div style="font-size:40px;margin-bottom:12px">✅</div>
+    <div style="font-size:16px;font-weight:700;color:#111;margin-bottom:10px">ご回答ありがとうございました</div>
+    <div style="font-size:13px;color:#374151;line-height:1.9">
+      AIによるマッチング結果を岡代表が確認いたします。<br>
+      内容を確認のうえ、マッチした企業名を登録メールアドレス宛にご案内いたしますので、今しばらくお待ちください。
+    </div>
+  </div>
+</div>
+<script>
+const jssaUser=sessionStorage.getItem('jssa_user');
+if(!jssaUser){window.location.href='/login';}
+const currentUser=jssaUser?JSON.parse(jssaUser):{};
+const reqMs=['ms1','ms3','ms4'];
+function toggleMs(id){const drop=document.getElementById(id+'-drop');const btn=document.getElementById(id+'-btn');const isOpen=drop.classList.contains('open');document.querySelectorAll('.ms-dropdown.open').forEach(d=>{d.classList.remove('open');});document.querySelectorAll('.ms-trigger.open').forEach(b=>{b.classList.remove('open');});if(!isOpen){drop.classList.add('open');btn.classList.add('open');}}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap')){document.querySelectorAll('.ms-dropdown.open').forEach(d=>d.classList.remove('open'));document.querySelectorAll('.ms-trigger.open').forEach(b=>b.classList.remove('open'));}});
+function updateMs(id,changedVal){
+const allChecks=document.querySelectorAll('#'+id+'-drop input[type=checkbox]');
+if(changedVal==='こだわらない'){
+const isNowChecked=Array.from(allChecks).find(c=>c.value==='こだわらない')?.checked;
+if(isNowChecked){allChecks.forEach(c=>{if(c.value!=='こだわらない')c.checked=false;});}
+}else{
+const hasOther=Array.from(allChecks).some(c=>c.value!=='こだわらない'&&c.checked);
+if(hasOther){const kodawari=Array.from(allChecks).find(c=>c.value==='こだわらない');if(kodawari)kodawari.checked=false;}
+}
+const checks=document.querySelectorAll('#'+id+'-drop input:checked');
+const vals=Array.from(checks).map(c=>c.value);
+const txt=document.getElementById(id+'-text');
+const btn=document.getElementById(id+'-btn');
+const isReq=reqMs.includes(id);
+txt.textContent=vals.length===0?(isReq?'選択してください':'こだわらない'):vals.length===1?vals[0]:vals.length+'件選択中';
+btn.classList.toggle('selected',vals.length>0);
+if(isReq){btn.classList.toggle('invalid',vals.length===0);}
+document.querySelectorAll('#'+id+'-drop .ms-item').forEach(i=>i.classList.toggle('checked',i.querySelector('input').checked));
+}
+function getMs(id){return Array.from(document.querySelectorAll('#'+id+'-drop input:checked')).map(c=>c.value);}
+// お気に入り・企業検索・カード表示・会いたいリクエストはアプリ2では非公開（管理者経由フローに変更のため未使用）
+async function doSearch(){
+const listed=document.getElementById('f-listed').value;
+const ind=getMs('ms1');const scale=getMs('ms3');const pos=getMs('ms4');
+const miss=ind.length===0||!listed||scale.length===0||pos.length===0;
+const errEl=document.getElementById('err-msg');errEl.classList.toggle('show',miss);if(miss)return;
+saveAnswers();
+const btn=document.getElementById('submit-btn');btn.textContent='送信中...';btn.disabled=true;
+try{
+const res=await fetch('/.netlify/functions/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:{industry:ind,listed,scale,position:pos,years:getMs('ms5'),capital:getMs('ms6'),employees:getMs('ms7'),hiring:getMs('ms8'),ma:document.getElementById('f-ma').value,region:getMs('ms10')},userInfo:{id:currentUser.id||'guest',company:currentUser.company||'ゲスト',name:currentUser.name||'',position:currentUser.position||'',email:currentUser.email||'',memberRank:currentUser.memberRank||'レギュラー'}})});
+const data=await res.json();
+if(!data.success)throw new Error(data.error||'エラーが発生しました');
+document.getElementById('submit-btn').style.display='none';
+document.getElementById('results-section').style.display='block';
+document.getElementById('results-section').scrollIntoView({behavior:'smooth'});
+}catch(e){alert('エラー: '+e.message);}
+finally{btn.textContent='✨ マッチングを申し込む';btn.disabled=false;}
+}
+function doReset(){document.querySelectorAll('.ms-dropdown input[type=checkbox]').forEach(c=>c.checked=false);['ms1','ms3','ms4','ms5','ms6','ms7','ms8','ms10'].forEach(id=>{const isReq=reqMs.includes(id);document.getElementById(id+'-text').textContent=isReq?'選択してください':'こだわらない';const btn=document.getElementById(id+'-btn');btn.classList.remove('selected');if(isReq)btn.classList.add('invalid');document.querySelectorAll('#'+id+'-drop .ms-item').forEach(i=>i.classList.remove('checked'));});document.getElementById('f-listed').selectedIndex=0;document.getElementById('f-ma').selectedIndex=0;document.getElementById('err-msg').classList.remove('show');document.getElementById('results-section').style.display='none';document.getElementById('submit-btn').style.display='';}
+function saveAnswers(){const answers={industry:getMs('ms1'),listed:document.getElementById('f-listed').value,scale:getMs('ms3'),position:getMs('ms4'),years:getMs('ms5'),capital:getMs('ms6'),employees:getMs('ms7'),hiring:getMs('ms8'),ma:document.getElementById('f-ma').value,region:getMs('ms10')};localStorage.setItem('jssa_answers',JSON.stringify(answers));}
+function loadAnswers(){const saved=localStorage.getItem('jssa_answers');if(!saved)return;try{const answers=JSON.parse(saved);if(answers.listed)document.getElementById('f-listed').value=answers.listed;if(answers.ma)document.getElementById('f-ma').value=answers.ma;const map={ms1:'industry',ms3:'scale',ms4:'position',ms5:'years',ms6:'capital',ms7:'employees',ms8:'hiring',ms10:'region'};Object.keys(map).forEach(id=>{const savedVals=answers[map[id]]||[];if(savedVals.length>0){document.querySelectorAll('#'+id+'-drop input[type=checkbox]').forEach(c=>{if(savedVals.includes(c.value))c.checked=true;});updateMs(id,null);}});}catch(e){console.error('loadAnswers error:',e);}}
+function logout(){if(!confirm('ログアウトしますか？'))return;sessionStorage.clear();window.location.href='/login';}
+fetch('/.netlify/functions/counter',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.count)document.getElementById('counter-val').textContent=Number(d.count).toLocaleString();}).catch(()=>{});
+fetch('/.netlify/functions/debug?pass=jssa2025').then(r=>r.json()).then(d=>{if(d.total)document.getElementById('total-count').textContent=Number(d.total).toLocaleString();}).catch(()=>{});
+if(currentUser.name){document.getElementById('user-name').textContent=currentUser.name;}
+loadAnswers();
+</script>
+</body>
+</html>

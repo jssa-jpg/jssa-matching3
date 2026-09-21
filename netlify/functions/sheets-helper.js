@@ -1,0 +1,217 @@
+let cachedData = null;
+let cacheTime = 0;
+const CACHE_TTL = 5 * 60 * 1000;
+
+async function getParticipants() {
+  const now = Date.now();
+  if (cachedData && (now - cacheTime) < CACHE_TTL) return cachedData;
+
+  const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+  const sheetId = process.env.GOOGLE_SHEET_ID;
+  const token = await getAccessToken(serviceAccount);
+
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A:Z`;
+  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Sheets API error: ${res.status}`);
+
+  const data = await res.json();
+  const rows = data.values || [];
+  if (rows.length < 2) return [];
+
+  const participants = [];
+  let pid = 1;
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row[0]) continue;
+
+    const company    = clean(row[0]);
+    const department = clean(row[1]);
+    const position   = clean(row[2]);
+    const name       = clean(row[3]);
+    const email      = clean(row[4]);
+    const zip        = clean(row[5]);
+    const address    = clean(row[6]);
+    const telOffice  = clean(row[7]);
+    const telDept    = clean(row[8]);
+    const telDirect  = clean(row[9]);
+    const fax        = clean(row[10]);
+    const mobile     = clean(row[11]);
+    const siteUrl    = clean(row[12]);
+    const cardDate   = clean(row[13]);
+    const industry   = clean(row[14]);
+    const scale      = clean(row[15]);
+    const employees  = clean(row[16]);
+    const founded    = clean(row[17]);
+    const capital    = clean(row[18]);
+    const listed     = clean(row[19]);
+    const hiring     = clean(row[20]);
+    const maHistory  = clean(row[21]);
+    const features   = clean(row[22]);
+    const facebook   = clean(row[23]);
+
+    if (!company) continue;
+
+    // 都道府県名のみ（先頭4文字・数字記号除去）
+    const prefecture = address ? address.replace(/[0-9０-９\-－\s]/g, '').slice(0, 4) : '';
+    // 表示用住所（先頭8文字・数字記号除去）
+    const addressDisplay = address ? address.replace(/[0-9０-９\-－\s]/g, '').slice(0, 8) : '';
+
+    const isListed = listed && listed !== '' && listed !== '未上場' && listed !== '-' && listed !== '－' && listed !== '未上場企業';
+
+    let scaleClass = scale || '';
+    if (!scaleClass && employees) {
+      const empNum = parseInt(employees.replace(/[^0-9]/g, ''));
+      if (!isNaN(empNum)) {
+        if (empNum >= 500) scaleClass = 'EP';
+        else if (empNum >= 50) scaleClass = 'MID';
+        else scaleClass = 'SMB';
+      }
+    }
+
+    participants.push({
+      id: pid++,
+      company, department, position,
+      industry, scale: scaleClass, employees,
+      founded, capital,
+      listed: isListed ? listed : '',
+      hiring, ma: maHistory,
+      features: (features || '').slice(0, 300),
+      prefecture, address: addressDisplay,
+      name, email, siteUrl, facebook,
+      telOffice, telDept, telDirect, fax, mobile, zip, cardDate,
+      listingStatus: isListed ? '上場企業' : '未上場企業',
+      employeeScale: scaleClass,
+      wantAttribute: ['スタートアップ', '支援者'],
+    });
+  }
+
+  cachedData = participants;
+  cacheTime = now;
+  return participants;
+}
+
+function getEmailMap(participants) {
+  const map = {};
+  for (const p of participants) {
+    map[`${p.company}_${p.name}`] = p.email;
+  }
+  return map;
+}
+
+function clean(s) {
+  if (!s) return '';
+  return String(s).trim().replace(/[\r\n\t]+/g, ' ');
+}
+
+async function saveMatchHistory(userId, matches) {
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const now = new Date().toISOString();
+    const yearMonth = now.slice(0, 7);
+    const values = matches.map(m => [String(userId), m.company, now, m.score, m.requested ? "1" : "0", yearMonth]);
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E3%83%9E%E3%83%83%E3%83%81%E3%83%B3%E3%82%B0%E5%B1%A5%E6%AD%B4:append?valueInputOption=RAW`,
+      { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values }) }
+    );
+  } catch (e) {
+    console.error('saveMatchHistory error:', e.message);
+  }
+}
+
+async function getMatchHistory(userId) {
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E3%83%9E%E3%83%83%E3%83%81%E3%83%B3%E3%82%B0%E5%B1%A5%E6%AD%B4`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    const data = await res.json();
+    const rows = data.values || [];
+    return rows.slice(1)
+      .filter(r => r[0] === String(userId))
+      .map(r => ({ company: r[1], date: r[2], score: r[3], requested: r[4] === "1" }));
+  } catch (e) {
+    console.error('getMatchHistory error:', e.message);
+    return [];
+  }
+}
+
+async function getMonthlyRequestCount(userId) {
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const yearMonth = new Date().toISOString().slice(0, 7);
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E6%9C%88%E6%AC%A1%E3%83%AA%E3%82%AF%E3%82%A8%E3%82%B9%E3%83%88%E6%95%B0`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    const data = await res.json();
+    const rows = data.values || [];
+    const row = rows.find(r => r[0] === String(userId) && r[1] === yearMonth);
+    return row ? parseInt(row[2] || "0") : 0;
+  } catch (e) {
+    console.error('getMonthlyRequestCount error:', e.message);
+    return 0;
+  }
+}
+
+// アプリ2用：マッチング結果を「マッチング結果」シートに保存（管理者レビュー用、ユーザーには非公開）
+async function saveMatchResultsForReview(userId, userInfo, matches) {
+  try {
+    if (!matches || matches.length === 0) return;
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const now = new Date().toISOString();
+    const batchId = `${String(userId || 'guest')}_${now}`;
+    // 列: バッチID, 日時, ユーザーID, ユーザー会社名, ユーザー氏名, ユーザーメール, マッチ企業名, スコア, ステータス（未通知/企業名送信済み）
+    const values = matches.map(m => [
+      batchId, now, String(userId || ''), userInfo.company || '', userInfo.name || '',
+      userInfo.email || '', m.company, String(m.score || ''), '未通知'
+    ]);
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('マッチング結果')}:append?valueInputOption=RAW`,
+      { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values }) }
+    );
+  } catch (e) {
+    console.error('saveMatchResultsForReview error:', e.message);
+  }
+}
+
+async function getAccessToken(serviceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const payloadObj = {
+    iss: serviceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now,
+  };
+  const payload = btoa(unescape(encodeURIComponent(JSON.stringify(payloadObj))))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const sigInput = `${header}.${payload}`;
+  const crypto = require('crypto');
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(sigInput);
+  const signature = sign.sign(serviceAccount.private_key, 'base64')
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const jwt = `${sigInput}.${signature}`;
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error('トークン取得失敗: ' + JSON.stringify(data));
+  return data.access_token;
+}
+
+module.exports = { getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, saveMatchResultsForReview };

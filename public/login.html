@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ログイン - JSSAエコシステムマッチングツール</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',system-ui,sans-serif;background:#0B0F1A;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.wrap{width:100%;max-width:420px}
+.logo{text-align:center;margin-bottom:32px}
+.logo-badge{background:#639922;color:#fff;font-weight:800;font-size:14px;padding:4px 14px;border-radius:5px;margin-right:8px}
+.logo-title{font-size:18px;font-weight:700;color:#fff}
+.logo-sub{font-size:12px;color:rgba(255,255,255,0.4);margin-top:8px}
+.card{background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.09);border-radius:16px;padding:28px 24px}
+.tab-row{display:flex;gap:0;margin-bottom:24px;background:rgba(255,255,255,0.05);border-radius:8px;padding:3px}
+.tab{flex:1;padding:8px;border:none;background:transparent;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;cursor:pointer;border-radius:6px;font-family:inherit;transition:all .15s}
+.tab.active{background:#639922;color:#fff}
+.flabel{display:block;font-size:11px;font-weight:600;color:rgba(255,255,255,0.5);margin-bottom:5px;letter-spacing:0.04em}
+.rb{background:#C55A11;color:#fff;font-size:7px;font-weight:700;padding:1px 3px;border-radius:2px;margin-left:4px}
+.ob{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.3);font-size:7px;font-weight:600;padding:1px 3px;border-radius:2px;margin-left:4px}
+.finput{width:100%;background:rgba(255,255,255,0.07);border:0.5px solid rgba(255,255,255,0.12);border-radius:7px;padding:10px 12px;font-size:13px;color:#fff;outline:none;font-family:inherit;margin-bottom:12px}
+.finput:focus{border-color:#639922}
+.finput::placeholder{color:rgba(255,255,255,0.25)}
+.btn{width:100%;background:#639922;border:none;border-radius:8px;padding:13px;font-size:14px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit;transition:background .15s}
+.btn:hover{background:#3B6D11}
+.btn:disabled{background:#444;cursor:not-allowed}
+.err{color:#E24B4A;font-size:12px;margin-top:8px;display:none;text-align:center}
+.err.show{display:block}
+.note{font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:16px;line-height:1.6}
+.invite-note{background:rgba(99,153,34,0.08);border:0.5px solid rgba(99,153,34,0.2);border-radius:8px;padding:10px 12px;font-size:11px;color:#97C459;margin-bottom:16px;line-height:1.6}
+.counter{text-align:center;margin-bottom:20px}
+.counter-inner{display:inline-flex;align-items:center;gap:6px;background:rgba(99,153,34,0.1);border:0.5px solid rgba(99,153,34,0.2);border-radius:20px;padding:4px 14px}
+.cdot{width:6px;height:6px;border-radius:50%;background:#639922;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.ctext{font-size:12px;color:rgba(255,255,255,0.5)}
+.cnum{color:#97C459;font-weight:700}
+.divider{height:0.5px;background:rgba(255,255,255,0.08);margin:16px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div><span class="logo-badge">JSSA</span><span class="logo-title">エコシステムマッチングツール</span></div>
+    <div class="logo-sub">最適な出会いをAIが見つける</div>
+  </div>
+  <div class="counter">
+    <div class="counter-inner">
+      <div class="cdot"></div>
+      <span class="ctext">累計 <span class="cnum" id="counter-val">---</span> アクセス</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="tab-row">
+      <button class="tab active" id="tab-login" onclick="showTab('login')">ログイン</button>
+      <button class="tab" id="tab-register" onclick="showTab('register')">新規登録</button>
+    </div>
+    <div id="form-login">
+      <label class="flabel">招待コード<span class="rb">必須</span></label>
+      <input class="finput" type="text" id="login-invite" placeholder="請求書管理番号を入力">
+      <label class="flabel">メールアドレス<span class="rb">必須</span></label>
+      <input class="finput" type="email" id="login-email" placeholder="your@email.com" onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="btn" onclick="doLogin()" id="login-btn">ログイン →</button>
+      <div class="err" id="login-err"></div>
+      <div class="note">初めての方は「新規登録」タブから登録してください</div>
+    </div>
+    <div id="form-register" style="display:none">
+      <div class="invite-note">💡 招待コード（請求書管理番号）は事務局から案内されます。</div>
+      <label class="flabel">招待コード<span class="rb">必須</span></label>
+      <input class="finput" type="text" id="reg-invite" placeholder="請求書管理番号を入力">
+      <div class="divider"></div>
+      <label class="flabel">会社名<span class="rb">必須</span></label>
+      <input class="finput" type="text" id="reg-company" placeholder="株式会社〇〇">
+      <label class="flabel">役職<span class="rb">必須</span></label>
+      <input class="finput" type="text" id="reg-position" placeholder="代表取締役・営業部長 など">
+      <label class="flabel">氏名<span class="rb">必須</span></label>
+      <input class="finput" type="text" id="reg-name" placeholder="山田 太郎">
+      <label class="flabel">メールアドレス<span class="rb">必須</span></label>
+      <input class="finput" type="email" id="reg-email" placeholder="your@email.com">
+      <label class="flabel">携帯電話番号<span class="rb">必須</span></label>
+      <input class="finput" type="tel" id="reg-mobile" placeholder="090-0000-0000">
+      <label class="flabel">会社HP<span class="ob">任意</span></label>
+      <input class="finput" type="url" id="reg-website" placeholder="https://www.example.com">
+      <label class="flabel">FacebookプロフィールURL<span class="ob">任意</span></label>
+      <input class="finput" type="url" id="reg-facebook" placeholder="https://www.facebook.com/yourname">
+      <button class="btn" onclick="doRegister()" id="reg-btn">登録してはじめる →</button>
+      <div class="err" id="reg-err"></div>
+      <div class="note">登録情報は事務局のみが参照できます。<br>マッチング成立時に相手に開示されます。</div>
+    </div>
+  </div>
+</div>
+<script>
+function showTab(tab){
+  document.getElementById('form-login').style.display=tab==='login'?'block':'none';
+  document.getElementById('form-register').style.display=tab==='register'?'block':'none';
+  document.getElementById('tab-login').classList.toggle('active',tab==='login');
+  document.getElementById('tab-register').classList.toggle('active',tab==='register');
+}
+
+async function doLogin(){
+  const inviteCode=document.getElementById('login-invite').value.trim();
+  const email=document.getElementById('login-email').value.trim();
+  const err=document.getElementById('login-err');
+  err.classList.remove('show');
+  if(!inviteCode||!email){err.textContent='招待コードとメールアドレスを入力してください';err.classList.add('show');return;}
+  const btn=document.getElementById('login-btn');
+  btn.disabled=true;btn.textContent='確認中...';
+  try{
+    const res=await fetch('/.netlify/functions/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'login',inviteCode,email})});
+    const data=await res.json();
+    if(data.success){
+      sessionStorage.setItem('jssa_user',JSON.stringify(data.user));
+      sessionStorage.setItem('jssa_company',data.user.company);
+      localStorage.setItem('jssa_invite',inviteCode);
+      localStorage.setItem('jssa_email',email);
+      const profileDone=sessionStorage.getItem('jssa_profile_done');
+      if(!profileDone){
+        window.location.href='/profile';
+      }else{
+        window.location.href='/';
+      }
+    }else if(data.needRegister){
+      err.textContent='登録されていません。新規登録タブから登録してください。';
+      err.classList.add('show');
+      showTab('register');
+    }else{
+      err.textContent=data.error||'ログインに失敗しました';
+      err.classList.add('show');
+    }
+  }catch(e){
+    err.textContent='エラー: '+e.message;
+    err.classList.add('show');
+  }finally{
+    btn.disabled=false;btn.textContent='ログイン →';
+  }
+}
+
+async function doRegister(){
+  const inviteCode=document.getElementById('reg-invite').value.trim();
+  const company=document.getElementById('reg-company').value.trim();
+  const position=document.getElementById('reg-position').value.trim();
+  const name=document.getElementById('reg-name').value.trim();
+  const email=document.getElementById('reg-email').value.trim();
+  const mobile=document.getElementById('reg-mobile').value.trim();
+  const website=document.getElementById('reg-website').value.trim();
+  const facebook=document.getElementById('reg-facebook').value.trim();
+  const err=document.getElementById('reg-err');
+  err.classList.remove('show');
+  if(!inviteCode||!company||!position||!name||!email||!mobile){
+    err.textContent='必須項目を全て入力してください';err.classList.add('show');return;
+  }
+  const btn=document.getElementById('reg-btn');
+  btn.disabled=true;btn.textContent='登録中...';
+  try{
+    const res=await fetch('/.netlify/functions/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'register',inviteCode,company,position,name,email,mobile,website,facebook})});
+    const data=await res.json();
+    if(data.success){
+      sessionStorage.setItem('jssa_user',JSON.stringify(data.user));
+      sessionStorage.setItem('jssa_company',data.user.company);
+      localStorage.setItem('jssa_invite',inviteCode);
+      localStorage.setItem('jssa_email',email);
+      window.location.href='/profile';
+    }else if(data.needLogin){
+      err.textContent='このメールアドレスは登録済みです。ログインしてください。';
+      err.classList.add('show');
+      showTab('login');
+    }else{
+      err.textContent=data.error||'登録に失敗しました';
+      err.classList.add('show');
+    }
+  }catch(e){
+    err.textContent='エラー: '+e.message;
+    err.classList.add('show');
+  }finally{
+    btn.disabled=false;btn.textContent='登録してはじめる →';
+  }
+}
+
+fetch('/.netlify/functions/counter',{method:'POST'}).then(r=>r.json()).then(d=>{
+  if(d.count)document.getElementById('counter-val').textContent=Number(d.count).toLocaleString();
+}).catch(()=>{});
+
+// 招待コード・メールアドレスの自動入力
+const savedInvite=localStorage.getItem('jssa_invite');
+const savedEmail=localStorage.getItem('jssa_email');
+if(savedInvite)document.getElementById('login-invite').value=savedInvite;
+if(savedEmail)document.getElementById('login-email').value=savedEmail;
+
+const user=sessionStorage.getItem('jssa_user');
+if(user){window.location.href='/';}
+</script>
+</body>
+</html>

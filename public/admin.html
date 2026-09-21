@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JSSA管理画面</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f3f4f6;color:#1f2937;min-height:100vh;font-size:14px}
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.login-card{background:#fff;border-radius:16px;padding:40px 36px;max-width:380px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,.12)}
+.login-logo{text-align:center;margin-bottom:28px}
+.login-badge{background:#639922;color:#fff;font-weight:800;font-size:14px;padding:4px 14px;border-radius:5px;margin-right:8px}
+.login-title{font-size:18px;font-weight:700;color:#0B0F1A;display:inline}
+.login-sub{font-size:13px;color:#6b7280;text-align:center;margin-bottom:24px}
+.field-label{display:block;font-size:12px;font-weight:700;color:#4b5563;margin-bottom:6px}
+input[type=password]{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;outline:none;margin-bottom:16px}
+input[type=password]:focus{border-color:#639922}
+.btn-login{width:100%;padding:13px;background:#0B0F1A;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}
+.login-err{color:#dc2626;font-size:13px;margin-top:8px;display:none;text-align:center}
+.main-wrap{display:none;min-height:100vh}
+header{background:#000F1A;padding:0;position:sticky;top:0;z-index:100}
+.hdr{max-width:1100px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-badge{background:#639922;color:#fff;font-weight:800;font-size:12px;padding:3px 10px;border-radius:4px}
+.logo-text{color:#fff;font-size:14px;font-weight:500}
+.btn-logout{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:6px 14px;font-size:12px;color:rgba(255,255,255,0.7);cursor:pointer}
+.container{max-width:1100px;margin:0 auto;padding:24px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stat-card{background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.stat-num{font-size:28px;font-weight:800;color:#1f2937}
+.stat-num.orange{color:#f59e0b}
+.stat-num.green{color:#10b981}
+.stat-num.red{color:#ef4444}
+.stat-label{font-size:12px;color:#6b7280;margin-top:4px}
+.tabs{display:flex;gap:8px;margin-bottom:20px;align-items:center;flex-wrap:wrap}
+.tab{padding:8px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;background:#fff;color:#6b7280;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.tab.active{background:#0B0F1A;color:#fff}
+.tab-trash{background:#fff;color:#ef4444;border:1px solid #fecaca}
+.tab-trash.active{background:#ef4444;color:#fff}
+.btn-refresh{background:#639922;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer}
+.empty{text-align:center;padding:60px;color:#9ca3af}
+.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid #e5e7eb}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.card-title{font-size:15px;font-weight:700;color:#0B0F1A}
+.card-sub{font-size:12px;color:#6b7280;margin-top:2px}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+.badge-new{background:#fef3c7;color:#92400e}
+.badge-done{background:#d1fae5;color:#065f46}
+.badge-ng{background:#fee2e2;color:#991b1b}
+.badge-trash{background:#fce7f3;color:#9d174d}
+.card-body{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.info-item .label{font-size:11px;color:#9ca3af}
+.info-item .value{font-size:13px;color:#374151;font-weight:500}
+.msg-box{background:#f9fafb;border-radius:8px;padding:12px;font-size:12px;color:#374151;line-height:1.6;margin-bottom:12px;border:1px solid #e5e7eb}
+.reason-box{background:#f0f9e8;border-radius:8px;padding:12px;font-size:12px;color:#374151;line-height:1.6;margin-bottom:12px;border:1px solid #c0dd97}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn-approve{background:#0B0F1A;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;flex:1}
+.btn-approve:hover{background:#639922}
+.btn-decline{background:#fff;color:#ef4444;border:1px solid #fecaca;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-decline:hover{background:#fee2e2}
+.btn-delete{background:#fff;color:#9ca3af;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer}
+.btn-delete:hover{background:#fee2e2;color:#ef4444;border-color:#fecaca}
+.btn-restore{background:#639922;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer}
+.detail-wrap{display:none;background:#fff;border-radius:12px;padding:24px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);border:2px solid #0B0F1A}
+.detail-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.detail-title{font-size:18px;font-weight:700;color:#0B0F1A}
+.btn-close{background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+.edit-label{font-size:12px;font-weight:700;color:#4b5563;margin-bottom:6px;display:block}
+textarea{width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:10px 12px;font-size:13px;color:#374151;outline:none;resize:vertical;font-family:inherit}
+textarea:focus{border-color:#639922}
+.char-count{text-align:right;font-size:11px;color:#9ca3af;margin-top:3px}
+.from-box{background:#f0f9e8;border:1px solid #c0dd97;border-radius:8px;padding:12px;margin-bottom:16px}
+.from-label{font-size:11px;color:#639922;font-weight:700;margin-bottom:6px}
+.from-info{font-size:12px;color:#374151;line-height:2}
+.detail-actions{display:flex;gap:10px;margin-top:16px}
+.btn-send{flex:2;background:#639922;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;color:#fff;cursor:pointer}
+.btn-send:hover{background:#3B6D11}
+.btn-send:disabled{background:#9ca3af;cursor:not-allowed}
+.btn-cancel{flex:1;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:13px;color:#6b7280;cursor:pointer}
+.trash-note{background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="login-wrap" id="login-wrap">
+  <div class="login-card">
+    <div class="login-logo"><span class="login-badge">JSSA</span><span class="login-title">管理画面</span></div>
+    <p class="login-sub">事務局専用 — パスワードを入力してください</p>
+    <label class="field-label">パスワード</label>
+    <input type="password" id="pw" placeholder="パスワードを入力" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn-login" onclick="doLogin()">ログイン →</button>
+    <div class="login-err" id="login-err">パスワードが違います</div>
+  </div>
+</div>
+<div class="main-wrap" id="main-wrap">
+  <header>
+    <div class="hdr">
+      <div class="logo"><span class="logo-badge">JSSA</span><span class="logo-text">管理画面　事務局専用</span></div>
+      <button class="btn-logout" onclick="logout()">ログアウト</button>
+    </div>
+  </header>
+  <div class="container">
+    <div class="stats">
+      <div class="stat-card"><div class="stat-num" id="stat-total">0</div><div class="stat-label">合計依頼数</div></div>
+      <div class="stat-card"><div class="stat-num orange" id="stat-new">0</div><div class="stat-label">未処理</div></div>
+      <div class="stat-card"><div class="stat-num green" id="stat-done">0</div><div class="stat-label">承認済み</div></div>
+      <div class="stat-card"><div class="stat-num red" id="stat-ng">0</div><div class="stat-label">却下</div></div>
+    </div>
+    <div class="tabs">
+      <button class="tab" onclick="setTab('matches')">📋 マッチング結果</button>
+      <button class="tab active" onclick="setTab('all')">すべて</button>
+      <button class="tab" onclick="setTab('new')">未処理</button>
+      <button class="tab" onclick="setTab('done')">承認済み</button>
+      <button class="tab" onclick="setTab('ng')">却下</button>
+      <button class="tab tab-trash" onclick="setTab('trash')">🗑 ゴミ箱</button>
+      <button class="btn-refresh" onclick="currentTab==='matches'?loadMatchResults():loadRequests()">🔄 更新</button>
+    </div>
+    <div id="detail-area"></div>
+    <div id="cards-area"><div class="empty">読み込み中...</div></div>
+  </div>
+</div>
+<script>
+let adminPassword='';
+let allRequests=[];
+let trashItems=[];
+let matchBatches=[];
+let currentTab='all';
+let isDetailOpen=false;
+let autoRefreshTimer=null;
+
+function doLogin(){
+  const pw=document.getElementById('pw').value;
+  if(!pw){return;}
+  adminPassword=pw;
+  document.getElementById('login-err').style.display='none';
+  loadRequests();
+}
+
+function logout(){
+  adminPassword='';
+  allRequests=[];
+  trashItems=[];
+  document.getElementById('main-wrap').style.display='none';
+  document.getElementById('login-wrap').style.display='flex';
+  document.getElementById('pw').value='';
+  clearAutoRefresh();
+}
+
+function startAutoRefresh(){
+  clearAutoRefresh();
+  autoRefreshTimer=setInterval(()=>{
+    if(!isDetailOpen)loadRequests(true);
+  },30000);
+}
+
+function clearAutoRefresh(){
+  if(autoRefreshTimer){clearInterval(autoRefreshTimer);autoRefreshTimer=null;}
+}
+
+async function loadRequests(silent=false){
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'list'})});
+    const data=await res.json();
+    if(!data.success){
+      if(data.error==='認証失敗'){document.getElementById('login-err').style.display='block';return;}
+      if(!silent)alert('エラー: '+data.error);return;
+    }
+    allRequests=data.requests||[];
+    document.getElementById('login-wrap').style.display='none';
+    document.getElementById('main-wrap').style.display='block';
+    updateStats();
+    renderCards();
+    startAutoRefresh();
+  }catch(e){
+    if(!silent)alert('通信エラー: '+e.message);
+  }
+}
+
+async function loadMatchResults(){
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getMatchResults'})});
+    const data=await res.json();
+    if(!data.success){alert('エラー: '+data.error);return;}
+    matchBatches=data.batches||[];
+    document.getElementById('login-wrap').style.display='none';
+    document.getElementById('main-wrap').style.display='block';
+    renderCards();
+  }catch(e){alert('通信エラー: '+e.message);}
+}
+
+async function sendCompanyNames(batch){
+  if(!confirm(`${batch.userName||batch.userCompany}様に、以下${batch.companies.length}社の企業名をメールで送信します。よろしいですか？`))return;
+  try{
+    const rowIndexes=batch.companies.map(c=>c.rowIndex);
+    const companies=batch.companies.map(c=>c.targetCompany);
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendCompanyNames',batchId:batch.batchId,rowIndexes,userEmail:batch.userEmail,userName:batch.userName,companies})});
+    const data=await res.json();
+    if(data.success){alert('企業名一覧を送信しました');loadMatchResults();}
+    else{alert(data.error||'送信に失敗しました');}
+  }catch(e){alert('エラー: '+e.message);}
+}
+
+async function addRequestFromReply(batch){
+  const company=prompt(`${batch.userName||batch.userCompany}様が会いたいとご返信された企業名を入力してください\n（候補: ${batch.companies.map(c=>c.targetCompany).join('、')}）`);
+  if(!company)return;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'addRequest',userId:batch.userId,userCompany:batch.userCompany,userName:batch.userName,userEmail:batch.userEmail,targetCompany:company})});
+    const data=await res.json();
+    if(data.success){alert('「会いたいリクエスト」に追加しました。「すべて」タブから役職者選定・プロフィール送信の作業を進めてください。');setTab('all');}
+    else{alert(data.error||'追加に失敗しました');}
+  }catch(e){alert('エラー: '+e.message);}
+}
+
+async function loadTrash(){
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getTrash'})});
+    const data=await res.json();
+    if(data.success)trashItems=data.items||[];
+    renderCards();
+  }catch(e){alert('エラー: '+e.message);}
+}
+
+function updateStats(){
+  const total=allRequests.length;
+  const newCount=allRequests.filter(r=>r.status==='リクエスト受付'||r.status==='未処理').length;
+  const done=allRequests.filter(r=>r.status==='推薦メール送信済').length;
+  const ng=allRequests.filter(r=>r.status==='見送り').length;
+  document.getElementById('stat-total').textContent=total;
+  document.getElementById('stat-new').textContent=newCount;
+  document.getElementById('stat-done').textContent=done;
+  document.getElementById('stat-ng').textContent=ng;
+}
+
+function setTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  if(typeof event!=='undefined'&&event.target)event.target.classList.add('active');
+  document.getElementById('detail-area').innerHTML='';
+  isDetailOpen=false;
+  if(tab==='trash'){loadTrash();}
+  else if(tab==='matches'){loadMatchResults();}
+  else{renderCards();}
+}
+
+function renderCards(){
+  const area=document.getElementById('cards-area');
+  if(currentTab==='matches'){
+    if(matchBatches.length===0){area.innerHTML='<div class="empty">マッチング結果はまだありません</div>';return;}
+    area.innerHTML=matchBatches.map(b=>{
+      const statusBadge=b.status==='未通知'?'<span class="badge badge-new">⏳ 未通知</span>':'<span class="badge badge-done">✅ 企業名送信済み</span>';
+      const companiesList=b.companies.map((c,i)=>`${i+1}. ${c.targetCompany}${c.score?`（マッチ度${c.score}%）`:''}`).join('<br>');
+      return `<div class="card">
+        <div class="card-head">
+          <div><div class="card-title">${b.userCompany||'—'} ${b.userName||''}</div><div class="card-sub">${b.userEmail||''} | ${b.createdAt?b.createdAt.slice(0,10):''} | ${b.companies.length}社マッチ</div></div>
+          ${statusBadge}
+        </div>
+        <div class="reason-box">${companiesList}</div>
+        <div class="actions">
+          <button class="btn-approve" onclick='sendCompanyNames(${JSON.stringify(b).replace(/'/g,"&#39;")})'>📧 企業名のみメール送信</button>
+          <button class="btn-decline" onclick='addRequestFromReply(${JSON.stringify(b).replace(/'/g,"&#39;")})'>💬 ユーザー返信を登録</button>
+        </div>
+      </div>`;
+    }).join('');
+    return;
+  }
+  if(currentTab==='trash'){
+    if(trashItems.length===0){area.innerHTML='<div class="empty">ゴミ箱は空です</div>';return;}
+    area.innerHTML=trashItems.map(r=>`
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">🗑 ${r.targetCompany||'—'}</div><div class="card-sub">${r.targetPosition||''} | 削除日時: ${r.deletedAt?r.deletedAt.slice(0,10):''}</div></div>
+          <span class="badge badge-trash">ゴミ箱</span>
+        </div>
+        <div class="card-body">
+          <div class="info-item"><div class="label">依頼者</div><div class="value">${r.memberCompany||'—'} ${r.memberName||''}</div></div>
+          <div class="info-item"><div class="label">元ステータス</div><div class="value">${r.status||'—'}</div></div>
+          <div class="info-item"><div class="label">依頼日時</div><div class="value">${r.createdAt?r.createdAt.slice(0,10):''}</div></div>
+        </div>
+        <div class="trash-note">このリクエストはゴミ箱に移動されました。復元または完全削除できます。</div>
+        <div class="actions">
+          <button class="btn-restore" onclick='restoreRequest(${JSON.stringify(r).replace(/'/g,"&#39;")})'>↩ 復元</button>
+        </div>
+      </div>`).join('');
+    return;
+  }
+  let filtered=allRequests;
+  if(currentTab==='new')filtered=allRequests.filter(r=>r.status==='リクエスト受付'||r.status==='未処理');
+  else if(currentTab==='done')filtered=allRequests.filter(r=>r.status==='推薦メール送信済');
+  else if(currentTab==='ng')filtered=allRequests.filter(r=>r.status==='見送り');
+  if(filtered.length===0){area.innerHTML='<div class="empty">該当する依頼はありません</div>';return;}
+  const getBadge=(s)=>{
+    if(s==='リクエスト受付'||s==='未処理')return'<span class="badge badge-new">⏳ 未処理</span>';
+    if(s==='推薦メール送信済')return'<span class="badge badge-done">✅ 承認済み</span>';
+    if(s==='見送り')return'<span class="badge badge-ng">❌ 見送り</span>';
+    return`<span class="badge">${s}</span>`;
+  };
+  area.innerHTML=filtered.map(r=>`
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">${r.targetCompany||'—'}</div><div class="card-sub">${r.targetPosition||''} | ${r.createdAt?r.createdAt.slice(0,10):''}</div></div>
+        ${getBadge(r.status)}
+      </div>
+      <div class="card-body">
+        <div class="info-item"><div class="label">依頼者会社</div><div class="value">${r.memberCompany||'—'}</div></div>
+        <div class="info-item"><div class="label">依頼者名</div><div class="value">${r.memberName||'—'}</div></div>
+        <div class="info-item"><div class="label">依頼者メール</div><div class="value">${r.memberEmail||'—'}</div></div>
+        <div class="info-item"><div class="label">依頼日時</div><div class="value">${r.createdAt?r.createdAt.slice(0,10):''}</div></div>
+      </div>
+      ${r.matchReason?`<div class="reason-box">🎯 ${r.matchReason}</div>`:''}
+      ${r.message?`<div class="msg-box">${r.message}</div>`:''}
+      <div class="actions">
+        <button class="btn-approve" onclick='openDetail(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✅ 推薦メール送信</button>
+        <button class="btn-decline" onclick='doDecline(${JSON.stringify(r).replace(/'/g,"&#39;")})'>❌ 見送り</button>
+        <button class="btn-delete" onclick='doDelete(${JSON.stringify(r).replace(/'/g,"&#39;")})' title="ゴミ箱へ">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+function openDetail(r){
+  isDetailOpen=true;
+  const area=document.getElementById('detail-area');
+  const defaultMsg=`${r.targetCompany||''}${r.targetPosition?' '+r.targetPosition:''} 担当者様\n\n日本スタートアップ支援協会（JSSA）の岡隆宏と申します。\n平素よりお世話になっております。\n\nこの度、弊協会の会員企業より、貴社との面談・情報交換のご希望をいただきましたので、ご紹介させていただきます。\n${r.matchReason?'\n【推薦理由】\n'+r.matchReason+'との判断により、ご推薦させていただきます。\n':''}\n【ご紹介する会員】\n会社名：${r.memberCompany||'—'}\n氏名　：${r.memberName||'—'}\nメール：${r.memberEmail||'—'}\n\nご都合がよろしければ、直接${r.memberName||''}様にご連絡いただけますと幸いです。\nご不明な点がございましたら、私（岡）までお気軽にご連絡ください。\n\n今後ともどうぞよろしくお願いいたします。`;
+  area.innerHTML=`<div class="detail-wrap" id="detail-box" style="display:block">
+    <div class="detail-head"><div class="detail-title">📨 推薦メール送信：${r.targetCompany||''}</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
+    <div class="from-box"><div class="from-label">✅ 申請者情報</div><div class="from-info">
+      <div><b>会社名：</b>${r.memberCompany||'—'}</div>
+      <div><b>氏名　：</b>${r.memberName||'—'}</div>
+      <div><b>メール：</b>${r.memberEmail||'—'}</div>
+      ${r.matchReason?`<div style="margin-top:8px;color:#639922;font-weight:600">🎯 ${r.matchReason}</div>`:''}
+      ${r.recommendation?`<div style="margin-top:4px;color:#374151">${r.recommendation}</div>`:''}
+    </div></div>
+    <label class="edit-label">メッセージ（編集可能）</label>
+    <textarea id="edit-msg" rows="12" oninput="document.getElementById('edit-char').textContent=this.value.length+'/2000'">${defaultMsg}</textarea>
+    <div class="char-count" id="edit-char">${defaultMsg.length}/2000</div>
+    <div class="detail-actions">
+      <button class="btn-cancel" onclick="closeDetail()">キャンセル</button>
+      <button class="btn-send" id="btn-send" onclick='sendRecommendation(${JSON.stringify(r).replace(/'/g,"&#39;")})'>📨 推薦メールを送信する</button>
+    </div>
+  </div>`;
+  area.scrollIntoView({behavior:'smooth'});
+}
+
+function closeDetail(){
+  isDetailOpen=false;
+  document.getElementById('detail-area').innerHTML='';
+}
+
+async function sendRecommendation(r){
+  const msg=document.getElementById('edit-msg').value;
+  if(!msg.trim()){alert('メッセージを入力してください');return;}
+  const btn=document.getElementById('btn-send');
+  btn.textContent='送信中...';btn.disabled=true;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendRecommendation',rowIndex:r.rowIndex,targetCompany:r.targetCompany,targetPosition:r.targetPosition,memberCompany:r.memberCompany,memberName:r.memberName,memberEmail:r.memberEmail,memberPosition:r.targetPosition,emailBody:msg,matchReason:r.matchReason})});
+    const data=await res.json();
+    if(data.success){closeDetail();alert('推薦メールを送信しました！');loadRequests();}
+    else alert('エラー: '+(data.error||'送信失敗'));
+  }catch(e){alert('エラー: '+e.message);}
+  finally{if(btn){btn.textContent='📨 推薦メールを送信する';btn.disabled=false;}}
+}
+
+async function doDecline(r){
+  if(!confirm(`${r.targetCompany}への紹介を見送りにしますか？\n会員(${r.memberName})に見送りメールが送信されます。`))return;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'decline',rowIndex:r.rowIndex,memberEmail:r.memberEmail,memberName:r.memberName,targetCompany:r.targetCompany})});
+    const data=await res.json();
+    if(data.success){alert('見送り処理が完了しました');loadRequests();}
+    else alert('エラー: '+data.error);
+  }catch(e){alert('エラー: '+e.message);}
+}
+
+async function doDelete(r){
+  if(!confirm(`このリクエストをゴミ箱に移動しますか？`))return;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'delete',rowIndex:r.rowIndex,requestId:r.requestId,userId:r.userId,targetCompany:r.targetCompany,targetPosition:r.targetPosition,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,memberCompany:r.memberCompany,memberName:r.memberName,memberEmail:r.memberEmail,message:r.message,matchReason:r.matchReason,recommendation:r.recommendation})});
+    const data=await res.json();
+    if(data.success){alert('ゴミ箱に移動しました');loadRequests();}
+    else alert('エラー: '+data.error);
+  }catch(e){alert('エラー: '+e.message);}
+}
+
+async function restoreRequest(r){
+  if(!confirm(`このリクエストを復元しますか？`))return;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'restore',rowIndex:r.rowIndex,requestId:r.requestId,userId:r.userId,targetCompany:r.targetCompany,targetPosition:r.targetPosition,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,memberCompany:r.memberCompany,memberName:r.memberName,memberEmail:r.memberEmail,message:r.message,matchReason:r.matchReason,recommendation:r.recommendation})});
+    const data=await res.json();
+    if(data.success){alert('復元しました');setTab('all');loadRequests();}
+    else alert('エラー: '+data.error);
+  }catch(e){alert('エラー: '+e.message);}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>マイページ - JSSAエコシステムマッチングツール</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0B0F1A;color:#fff;min-height:100vh}
+header{background:#0B0F1A;border-bottom:1px solid rgba(255,255,255,0.1);padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-badge{background:#639922;color:#fff;font-weight:700;font-size:12px;padding:3px 8px;border-radius:4px}
+.logo-title{font-size:13px;font-weight:600;color:#fff}
+.back-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:4px 10px;font-size:11px;color:rgba(255,255,255,0.6);cursor:pointer;text-decoration:none}
+.wrap{max-width:480px;margin:0 auto;padding:24px 16px 60px}
+.page-title{font-size:20px;font-weight:700;color:#fff;margin-bottom:6px}
+.page-sub{font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:24px;line-height:1.6}
+.section{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:16px;margin-bottom:14px}
+.section-title{font-size:11px;font-weight:700;color:#97C459;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:12px}
+.frow{margin-bottom:12px}
+.frow:last-child{margin-bottom:0}
+.flabel{font-size:11px;font-weight:500;color:rgba(255,255,255,0.55);margin-bottom:5px;display:block}
+.req{background:#C55A11;color:#fff;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;margin-left:4px}
+.finput,.fsel{width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;outline:none;font-family:inherit;appearance:none}
+.finput:focus,.fsel:focus{border-color:#639922}
+.fsel option{background:#1a2030;color:#fff}
+.ms-wrap{position:relative}
+.ms-btn{width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:10px 12px;font-size:13px;color:rgba(255,255,255,0.4);cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-family:inherit}
+.ms-btn.has-val{color:#fff}
+.ms-btn.open{border-color:#639922;border-radius:8px 8px 0 0}
+.ms-dd{display:none;position:absolute;top:100%;left:0;right:0;background:#1C2433;border:1px solid #639922;border-top:none;border-radius:0 0 8px 8px;z-index:100;max-height:180px;overflow-y:auto}
+.ms-dd.open{display:block}
+.ms-item{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:12px;color:rgba(255,255,255,0.7)}
+.ms-item:hover{background:rgba(99,153,34,0.1)}
+.ms-item input{accent-color:#639922;width:13px;height:13px;flex-shrink:0}
+.ms-item.checked{color:#fff;background:rgba(99,153,34,0.08)}
+.type-select{display:flex;gap:8px;margin-bottom:16px}
+.type-btn{flex:1;padding:10px;border:1px solid rgba(255,255,255,0.15);border-radius:8px;background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.type-btn.active{background:rgba(99,153,34,0.15);border-color:#639922;color:#97C459}
+.save-btn{width:100%;background:#639922;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:10px;font-family:inherit}
+.save-btn:hover{background:#3B6D11}
+.save-btn:disabled{background:#444;cursor:not-allowed}
+.logout-btn{width:100%;background:transparent;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:12px;font-size:13px;color:rgba(255,255,255,0.4);cursor:pointer;font-family:inherit}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(70px);background:#639922;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:all .3s;z-index:300}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.history-card{background:rgba(255,255,255,0.05);border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;margin-bottom:8px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <span class="logo-badge">JSSA</span>
+    <span class="logo-title">マイページ</span>
+  </div>
+  <a class="back-btn" href="/">← マッチングへ</a>
+</header>
+
+<div class="wrap">
+  <div class="page-title">登録情報の確認・修正</div>
+  <div class="page-sub">登録情報を確認・修正できます。</div>
+
+  <div class="section">
+    <div class="section-title">基本情報</div>
+    <div class="frow">
+      <label class="flabel">会社名<span class="req">必須</span></label>
+      <input class="finput" type="text" id="company" placeholder="株式会社〇〇">
+    </div>
+    <div class="frow">
+      <label class="flabel">役職<span class="req">必須</span></label>
+      <input class="finput" type="text" id="position" placeholder="代表取締役">
+    </div>
+    <div class="frow">
+      <label class="flabel">氏名<span class="req">必須</span></label>
+      <input class="finput" type="text" id="name" placeholder="山田 太郎">
+    </div>
+    <div class="frow">
+      <label class="flabel">メールアドレス<span class="req">必須</span></label>
+      <input class="finput" type="email" id="email" placeholder="your@email.com">
+    </div>
+    <div class="frow">
+      <label class="flabel">携帯電話番号<span class="req">必須</span></label>
+      <input class="finput" type="tel" id="mobile" placeholder="090-0000-0000">
+    </div>
+    <div class="frow">
+      <label class="flabel">会社HP</label>
+      <input class="finput" type="url" id="website" placeholder="https://www.example.com">
+    </div>
+    <div class="frow">
+      <label class="flabel">FacebookプロフィールURL</label>
+      <input class="finput" type="url" id="facebook" placeholder="https://www.facebook.com/yourname">
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">プロフィール情報</div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:rgba(255,255,255,0.55);margin-bottom:8px">あなたの立場</div>
+      <div class="type-select">
+        <button class="type-btn active" id="type-startup" onclick="setType('startup')">🚀 スタートアップ</button>
+        <button class="type-btn" id="type-supporter" onclick="setType('supporter')">🤝 支援者</button>
+      </div>
+    </div>
+    <div id="startup-section">
+      <div class="frow">
+        <label class="flabel">調達ラウンド</label>
+        <select class="fsel" id="fundingRound">
+          <option value="">選択してください</option>
+          <option>プレシード</option><option>シード</option><option>アーリー</option>
+          <option>Series A</option><option>Series B</option><option>Series C</option>
+          <option>プレIPO</option><option>未調達</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">調達希望額</label>
+        <select class="fsel" id="fundingTarget">
+          <option value="">選択してください</option>
+          <option>〜500万円</option><option>〜1,000万円</option><option>〜3,000万円</option>
+          <option>〜5,000万円</option><option>〜7,000万円</option><option>〜1億円</option>
+          <option>〜3億円</option><option>3億円以上</option><option>調達予定なし</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">事業課題（複数選択可）</label>
+        <div class="ms-wrap" id="ms-challenges">
+          <button type="button" class="ms-btn" id="ms-challenges-b" onclick="tog('ms-challenges')"><span id="ms-challenges-t">選択してください</span><span>▾</span></button>
+          <div class="ms-dd" id="ms-challenges-d">
+            <label class="ms-item"><input type="checkbox" value="資金調達" onchange="upd('ms-challenges')">資金調達</label>
+            <label class="ms-item"><input type="checkbox" value="採用・人材" onchange="upd('ms-challenges')">採用・人材</label>
+            <label class="ms-item"><input type="checkbox" value="販路開拓・営業" onchange="upd('ms-challenges')">販路開拓・営業</label>
+            <label class="ms-item"><input type="checkbox" value="技術・開発" onchange="upd('ms-challenges')">技術・開発</label>
+            <label class="ms-item"><input type="checkbox" value="マーケティング" onchange="upd('ms-challenges')">マーケティング</label>
+            <label class="ms-item"><input type="checkbox" value="法務・コンプライアンス" onchange="upd('ms-challenges')">法務・コンプライアンス</label>
+            <label class="ms-item"><input type="checkbox" value="IPO・EXIT" onchange="upd('ms-challenges')">IPO・EXIT</label>
+            <label class="ms-item"><input type="checkbox" value="海外展開" onchange="upd('ms-challenges')">海外展開</label>
+          </div>
+        </div>
+      </div>
+      <div class="frow">
+        <label class="flabel">海外展開意向</label>
+        <select class="fsel" id="globalExpansion">
+          <option value="">選択してください</option>
+          <option>あり（検討中）</option><option>あり（準備中）</option>
+          <option>済（展開済み）</option><option>なし</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">主要KPI</label>
+        <input class="finput" type="text" id="kpi" placeholder="例：MRR500万円、チャーンレート2％以下">
+      </div>
+    </div>
+    <div id="supporter-section" style="display:none">
+      <div class="frow">
+        <label class="flabel">支援実績件数</label>
+        <select class="fsel" id="supportCount">
+          <option value="">選択してください</option>
+          <option>〜5件</option><option>〜10件</option><option>〜30件</option>
+          <option>〜50件</option><option>〜100件</option><option>100件以上</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">得意な支援領域（複数選択可）</label>
+        <div class="ms-wrap" id="ms-supportArea">
+          <button type="button" class="ms-btn" id="ms-supportArea-b" onclick="tog('ms-supportArea')"><span id="ms-supportArea-t">選択してください</span><span>▾</span></button>
+          <div class="ms-dd" id="ms-supportArea-d">
+            <label class="ms-item"><input type="checkbox" value="資金調達・投資" onchange="upd('ms-supportArea')">資金調達・投資</label>
+            <label class="ms-item"><input type="checkbox" value="IPO支援" onchange="upd('ms-supportArea')">IPO支援</label>
+            <label class="ms-item"><input type="checkbox" value="M&A・EXIT支援" onchange="upd('ms-supportArea')">M&A・EXIT支援</label>
+            <label class="ms-item"><input type="checkbox" value="採用・人材支援" onchange="upd('ms-supportArea')">採用・人材支援</label>
+            <label class="ms-item"><input type="checkbox" value="販路開拓・営業支援" onchange="upd('ms-supportArea')">販路開拓・営業支援</label>
+            <label class="ms-item"><input type="checkbox" value="経営戦略・コンサル" onchange="upd('ms-supportArea')">経営戦略・コンサル</label>
+            <label class="ms-item"><input type="checkbox" value="法務・財務支援" onchange="upd('ms-supportArea')">法務・財務支援</label>
+            <label class="ms-item"><input type="checkbox" value="海外展開支援" onchange="upd('ms-supportArea')">海外展開支援</label>
+            <label class="ms-item"><input type="checkbox" value="マーケティング支援" onchange="upd('ms-supportArea')">マーケティング支援</label>
+          </div>
+        </div>
+      </div>
+      <div class="frow">
+        <label class="flabel">投資先・支援先の業種（複数選択可）</label>
+        <div class="ms-wrap" id="ms-investmentIndustry">
+          <button type="button" class="ms-btn" id="ms-investmentIndustry-b" onclick="tog('ms-investmentIndustry')"><span id="ms-investmentIndustry-t">選択してください</span><span>▾</span></button>
+          <div class="ms-dd" id="ms-investmentIndustry-d">
+            <label class="ms-item"><input type="checkbox" value="ITサービス・AI・通信・Web3" onchange="upd('ms-investmentIndustry')">ITサービス・AI・通信・Web3</label>
+            <label class="ms-item"><input type="checkbox" value="医療・ヘルスケア" onchange="upd('ms-investmentIndustry')">医療・ヘルスケア</label>
+            <label class="ms-item"><input type="checkbox" value="製造業・ハードウェア" onchange="upd('ms-investmentIndustry')">製造業・ハードウェア</label>
+            <label class="ms-item"><input type="checkbox" value="環境・エネルギー" onchange="upd('ms-investmentIndustry')">環境・エネルギー</label>
+            <label class="ms-item"><input type="checkbox" value="教育・EdTech" onchange="upd('ms-investmentIndustry')">教育・EdTech</label>
+            <label class="ms-item"><input type="checkbox" value="金融・FinTech" onchange="upd('ms-investmentIndustry')">金融・FinTech</label>
+            <label class="ms-item"><input type="checkbox" value="人材・HR" onchange="upd('ms-investmentIndustry')">人材・HR</label>
+            <label class="ms-item"><input type="checkbox" value="不動産・建設" onchange="upd('ms-investmentIndustry')">不動産・建設</label>
+            <label class="ms-item"><input type="checkbox" value="食品・農業" onchange="upd('ms-investmentIndustry')">食品・農業</label>
+            <label class="ms-item"><input type="checkbox" value="業種不問" onchange="upd('ms-investmentIndustry')">業種不問</label>
+          </div>
+        </div>
+      </div>
+      <div class="frow">
+        <label class="flabel">対応可能なラウンド（複数選択可）</label>
+        <div class="ms-wrap" id="ms-targetRound">
+          <button type="button" class="ms-btn" id="ms-targetRound-b" onclick="tog('ms-targetRound')"><span id="ms-targetRound-t">選択してください</span><span>▾</span></button>
+          <div class="ms-dd" id="ms-targetRound-d">
+            <label class="ms-item"><input type="checkbox" value="プレシード" onchange="upd('ms-targetRound')">プレシード</label>
+            <label class="ms-item"><input type="checkbox" value="シード" onchange="upd('ms-targetRound')">シード</label>
+            <label class="ms-item"><input type="checkbox" value="アーリー" onchange="upd('ms-targetRound')">アーリー</label>
+            <label class="ms-item"><input type="checkbox" value="Series A" onchange="upd('ms-targetRound')">Series A</label>
+            <label class="ms-item"><input type="checkbox" value="Series B" onchange="upd('ms-targetRound')">Series B</label>
+            <label class="ms-item"><input type="checkbox" value="Series C以降" onchange="upd('ms-targetRound')">Series C以降</label>
+            <label class="ms-item"><input type="checkbox" value="プレIPO" onchange="upd('ms-targetRound')">プレIPO</label>
+            <label class="ms-item"><input type="checkbox" value="ラウンド不問" onchange="upd('ms-targetRound')">ラウンド不問</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="section" id="history-section">
+    <div class="section-title">📋 会いたい履歴</div>
+    <div id="history-list"><div style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;padding:20px">読み込み中...</div></div>
+  </div>
+
+  <button class="save-btn" onclick="saveAll()" id="save-btn">✅ 保存する</button>
+  <button class="logout-btn" onclick="logout()">ログアウト</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const jssaUser=sessionStorage.getItem('jssa_user');
+if(!jssaUser){window.location.href='/login';}
+const currentUser=jssaUser?JSON.parse(jssaUser):{};
+let userType='startup';
+
+function setType(type){
+  userType=type;
+  document.getElementById('startup-section').style.display=type==='startup'?'block':'none';
+  document.getElementById('supporter-section').style.display=type==='supporter'?'block':'none';
+  document.getElementById('type-startup').classList.toggle('active',type==='startup');
+  document.getElementById('type-supporter').classList.toggle('active',type==='supporter');
+}
+
+function tog(id){
+  const dd=document.getElementById(id+'-d');
+  const bt=document.getElementById(id+'-b');
+  const isOpen=dd.classList.contains('open');
+  document.querySelectorAll('.ms-dd.open').forEach(d=>{d.classList.remove('open');d.previousElementSibling.classList.remove('open');});
+  if(!isOpen){dd.classList.add('open');bt.classList.add('open');}
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.ms-wrap')){
+    document.querySelectorAll('.ms-dd.open').forEach(d=>{d.classList.remove('open');d.previousElementSibling.classList.remove('open');});
+  }
+});
+
+function upd(id){
+  const cks=document.querySelectorAll('#'+id+'-d input:checked');
+  const vals=Array.from(cks).map(c=>c.value);
+  const tx=document.getElementById(id+'-t');
+  const bt=document.getElementById(id+'-b');
+  tx.textContent=vals.length===0?'選択してください':vals.length===1?vals[0]:vals.length+'件選択中';
+  bt.classList.toggle('has-val',vals.length>0);
+  document.querySelectorAll('#'+id+'-d .ms-item').forEach(o=>o.classList.toggle('checked',o.querySelector('input').checked));
+}
+
+function getMs(id){
+  return Array.from(document.querySelectorAll('#'+id+'-d input:checked')).map(c=>c.value).join('、');
+}
+
+function setMs(id,valStr){
+  if(!valStr)return;
+  const vals=valStr.split('、');
+  document.querySelectorAll('#'+id+'-d input[type=checkbox]').forEach(c=>{
+    if(vals.includes(c.value))c.checked=true;
+  });
+  upd(id);
+}
+
+async function saveAll(){
+  const company=document.getElementById('company').value.trim();
+  const position=document.getElementById('position').value.trim();
+  const name=document.getElementById('name').value.trim();
+  const email=document.getElementById('email').value.trim();
+  const mobile=document.getElementById('mobile').value.trim();
+  if(!company||!position||!name||!email||!mobile){alert('必須項目を全て入力してください');return;}
+  const btn=document.getElementById('save-btn');
+  btn.disabled=true;btn.textContent='保存中...';
+  const profile={
+    fundingRound:userType==='startup'?(document.getElementById('fundingRound').value||''):'',
+    fundingTarget:userType==='startup'?(document.getElementById('fundingTarget').value||''):'',
+    challenges:userType==='startup'?getMs('ms-challenges'):'',
+    globalExpansion:userType==='startup'?(document.getElementById('globalExpansion').value||''):'',
+    kpi:userType==='startup'?(document.getElementById('kpi').value||''):'',
+    supportCount:userType==='supporter'?(document.getElementById('supportCount').value||''):'',
+    supportArea:userType==='supporter'?getMs('ms-supportArea'):'',
+    investmentIndustry:userType==='supporter'?getMs('ms-investmentIndustry'):'',
+    targetRound:userType==='supporter'?getMs('ms-targetRound'):''
+  };
+  try{
+    const res=await fetch('/.netlify/functions/save-profile',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({userId:currentUser.id||'',company,profile})
+    });
+    const data=await res.json();
+    if(data.success){
+      const updatedUser=Object.assign({},currentUser,{company,position,name,email,mobile,website:document.getElementById('website').value.trim(),facebook:document.getElementById('facebook').value.trim(),profile});
+      sessionStorage.setItem('jssa_user',JSON.stringify(updatedUser));
+      showToast('保存しました ✓');
+    }else{alert('エラー: '+(data.error||'保存に失敗しました'));}
+  }catch(e){alert('エラー: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='✅ 保存する';}
+}
+// お気に入り機能はアプリ2では非公開（マッチング結果を直接閲覧できないため廃止）
+async function loadHistory(){
+  try{
+    const res=await fetch('/.netlify/functions/get-history',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({userId:currentUser.id||''})
+    });
+    const data=await res.json();
+    const list=document.getElementById('history-list');
+    if(!data.success||data.history.length===0){
+      list.innerHTML='<div style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;padding:20px">まだリクエスト履歴はありません</div>';
+      return;
+    }
+    const statusMap={'リクエスト受付':'⏳ 処理中','推薦メール送信済':'✅ 紹介済み','見送り':'❌ 見送り'};
+    const colorMap={'リクエスト受付':'#d97706','推薦メール送信済':'#639922','見送り':'#dc2626'};
+    list.innerHTML=data.history.map(h=>{
+      const date=h.createdAt?new Date(h.createdAt).toLocaleDateString('ja-JP'):'—';
+      const status=statusMap[h.status]||h.status;
+      const color=colorMap[h.status]||'#6B7280';
+      return `<div class="history-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="font-size:13px;font-weight:600;color:#fff">${h.targetCompany||'—'}</div>
+          <span style="font-size:11px;font-weight:700;color:${color}">${status}</span>
+        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4)">${h.targetPosition||'—'} / ${date}</div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    document.getElementById('history-list').innerHTML='<div style="font-size:12px;color:#dc2626;text-align:center;padding:20px">読み込みエラー</div>';
+  }
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function logout(){
+  if(!confirm('ログアウトしますか？'))return;
+  sessionStorage.clear();window.location.href='/login';
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('company').value=currentUser.company||'';
+  document.getElementById('position').value=currentUser.position||'';
+  document.getElementById('name').value=currentUser.name||'';
+  document.getElementById('email').value=currentUser.email||'';
+  document.getElementById('mobile').value=currentUser.mobile||'';
+  document.getElementById('website').value=currentUser.website||'';
+  document.getElementById('facebook').value=currentUser.facebook||'';
+  const profile=currentUser.profile||{};
+  if(profile.fundingRound)document.getElementById('fundingRound').value=profile.fundingRound;
+  if(profile.fundingTarget)document.getElementById('fundingTarget').value=profile.fundingTarget;
+  if(profile.globalExpansion)document.getElementById('globalExpansion').value=profile.globalExpansion;
+  if(profile.kpi)document.getElementById('kpi').value=profile.kpi;
+  if(profile.supportCount)document.getElementById('supportCount').value=profile.supportCount;
+  setMs('ms-challenges',profile.challenges||'');
+  setMs('ms-supportArea',profile.supportArea||'');
+  setMs('ms-investmentIndustry',profile.investmentIndustry||'');
+  setMs('ms-targetRound',profile.targetRound||'');
+  if(profile.supportCount||profile.supportArea){setType('supporter');}
+ loadHistory();
+});
+</script>
+</body>
+</html>
