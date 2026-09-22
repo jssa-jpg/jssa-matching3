@@ -2,6 +2,9 @@ let cachedData = null;
 let cacheTime = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 
+// 会員ランク別の月間紹介上限（岡代表が採択して送信した企業数でカウント）
+const MONTHLY_LIMITS = { 'レギュラーライト': 1, 'レギュラー': 2, 'プライム': 5, 'default': 3 };
+
 async function getParticipants() {
   const now = Date.now();
   if (cachedData && (now - cacheTime) < CACHE_TTL) return cachedData;
@@ -162,6 +165,33 @@ async function getMonthlyRequestCount(userId) {
   }
 }
 
+// 任意の件数（岡代表が採択して送信した企業数など）を月次カウントに加算する
+async function incrementMonthlyRequestCount(userId, count) {
+  try {
+    if (!userId || !count) return;
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const yearMonth = new Date().toISOString().slice(0, 7);
+    const getRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E6%9C%88%E6%AC%A1%E3%83%AA%E3%82%AF%E3%82%A8%E3%82%B9%E3%83%88%E6%95%B0`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    const getData = await getRes.json();
+    const rows = getData.values || [];
+    const rowIndex = rows.findIndex(r => r[0] === String(userId) && r[1] === yearMonth);
+    if (rowIndex >= 0) {
+      const currentCount = parseInt(rows[rowIndex][2] || '0');
+      const range = `月次リクエスト数!C${rowIndex + 1}`;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(currentCount + count)]] }) });
+    } else {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(count)]] }) });
+    }
+  } catch (e) {
+    console.error('incrementMonthlyRequestCount error:', e.message);
+  }
+}
+
 // アプリ2用：マッチング結果を「マッチング結果」シートに保存（管理者レビュー用、ユーザーには非公開）
 async function saveMatchResultsForReview(userId, userInfo, matches, aiParams) {
   try {
@@ -216,4 +246,4 @@ async function getAccessToken(serviceAccount) {
   return data.access_token;
 }
 
-module.exports = { getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, saveMatchResultsForReview };
+module.exports = { getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, incrementMonthlyRequestCount, saveMatchResultsForReview, MONTHLY_LIMITS };

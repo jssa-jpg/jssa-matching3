@@ -274,7 +274,9 @@ select option{background:#1a2030;color:#fff}
     </div>
   </div>
   <div class="err-msg" id="err-msg">①業種・②上場/未上場・③企業規模・④役職クラス はすべて選択してください</div>
+  <div id="rank-info" style="text-align:center;font-size:12px;color:#6B7280;margin-bottom:6px"></div>
   <button class="submit-btn" id="submit-btn" onclick="doSearch()">✨ マッチングを申し込む</button>
+  <div id="remaining-info" style="text-align:center;font-size:11px;color:#9CA3AF;margin-top:-2px;margin-bottom:12px"></div>
   <button class="reset-btn" onclick="doReset()">リセット</button>
 </div>
 <div id="results-section" style="display:none">
@@ -338,8 +340,27 @@ function loadAnswers(){const saved=localStorage.getItem('jssa_answers');if(!save
 function logout(){if(!confirm('ログアウトしますか？'))return;sessionStorage.clear();window.location.href='/login';}
 fetch('/.netlify/functions/counter',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.count)document.getElementById('counter-val').textContent=Number(d.count).toLocaleString();}).catch(()=>{});
 
+async function loadUserStatus(){
+  try{
+    const res=await fetch('/.netlify/functions/user-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:currentUser.id||'guest',memberRank:currentUser.memberRank||'レギュラー'})});
+    const data=await res.json();
+    if(!data.success)return;
+    const rankEl=document.getElementById('rank-info');
+    const remEl=document.getElementById('remaining-info');
+    if(rankEl)rankEl.textContent=`会員ランク：${data.memberRank}会員`;
+    if(remEl){
+      if(data.remaining>0){
+        remEl.textContent=`今月あと${data.remaining}社ご紹介可能です（上限${data.limit}社／月）`;
+      }else{
+        remEl.textContent=`今月のご紹介上限（${data.limit}社）に達しています。来月またお試しください`;
+      }
+    }
+  }catch(e){console.error('loadUserStatus error:',e);}
+}
+
 if(currentUser.name){document.getElementById('user-name').textContent=currentUser.name;}
 loadAnswers();
+loadUserStatus();
 </script>
 </body>
 </html>

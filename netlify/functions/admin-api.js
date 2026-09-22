@@ -1,4 +1,4 @@
-const{getParticipants}=require('./sheets-helper');
+const{getParticipants,incrementMonthlyRequestCount}=require('./sheets-helper');
 const RESEND_API_KEY=process.env.RESEND_API_KEY;
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const OFFICE_EMAIL='tok@yumeplanning.jp';
@@ -166,7 +166,7 @@ exports.handler=async(event)=>{
 
     if(action==='sendCompanyNames'){
       // ③ 岡代表が確認した企業名のみをユーザーにメール送信する
-      const{batchId,rowIndexes,userEmail,userName,companies}=body;
+      const{batchId,rowIndexes,userEmail,userName,companies,userId}=body;
       if(!userEmail)return{statusCode:400,headers,body:JSON.stringify({error:'送信先メールアドレスがありません'})};
       const list=(companies||[]).map((c,i)=>`${i+1}. ${c}`).join('\n');
       const mailText=`${userName||''} 様\n\n日本スタートアップ支援協会（JSSA）の岡隆宏です。\n平素よりお世話になっております。\n\nご登録いただいたご希望条件をもとに、AIマッチングシステムにて相性の良い企業様を選定いたしましたので、以下の通りご案内いたします。\n\n【マッチング企業一覧】\n${list}\n\nこの中で面談・情報交換をご希望される企業様がございましたら、本メールに返信する形で会社名をお知らせください。\n担当役職者の方をこちらで選定の上、あらためてご連絡いたします。\n\n${SIGNATURE}`;
@@ -175,6 +175,10 @@ exports.handler=async(event)=>{
       if(!res.ok)return{statusCode:500,headers,body:JSON.stringify({error:'メール送信失敗: '+JSON.stringify(resData)})};
       if(Array.isArray(rowIndexes)){
         for(const idx of rowIndexes){await updateCell(token,'マッチング結果',idx,'I','企業名送信済み');}
+      }
+      // 岡代表が採択して送信した企業数を、会員の月次カウントに加算する
+      if(userId&&Array.isArray(companies)&&companies.length>0){
+        try{await incrementMonthlyRequestCount(userId,companies.length);}catch(e){console.error('月次カウント加算エラー:',e.message);}
       }
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:'企業名一覧を送信しました'})};
     }
