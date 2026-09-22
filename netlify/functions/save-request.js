@@ -1,5 +1,5 @@
 const{getMonthlyRequestCount}=require('./sheets-helper');
-const MONTHLY_LIMITS={'レギュラーライト':1,'レギュラー':2,'プライム':5,'default':3};
+const MONTHLY_LIMITS={'レギュラーライト':1,'レギュラー':2,'プライム':5,'ライト':1,'特待生':2,'default':3};
 
 async function getAccessToken(){
   const sa=JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
