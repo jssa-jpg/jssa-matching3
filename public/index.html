@@ -133,25 +133,25 @@ select option{background:#1a2030;color:#fff}
   <div class="form-section">
     <div class="section-label">マッチングアンケート（必須項目）</div>
     <div class="field">
-      <div class="field-label">① 業種 <span class="req-badge">必須</span> <span class="multi-badge">複数可</span></div>
+      <div class="field-label">① 業種 <span class="req-badge">必須</span></div>
       <div class="ms-wrap" id="ms1">
         <button type="button" class="ms-trigger invalid" id="ms1-btn" onclick="toggleMs('ms1')"><span id="ms1-text">選択してください</span><span class="ms-arrow">▾</span></button>
         <div class="ms-dropdown" id="ms1-drop">
-          <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms1',this.value)">こだわらない</label>
-          <label class="ms-item"><input type="checkbox" value="VC・CVC・エンジェル・投資事業" onchange="updateMs('ms1',this.value)">VC・CVC・エンジェル・投資事業</label>
-          <label class="ms-item"><input type="checkbox" value="M&A仲介会社・FA" onchange="updateMs('ms1',this.value)">M&A仲介会社・FA</label>
-          <label class="ms-item"><input type="checkbox" value="コンサルタント・士業・監査法人" onchange="updateMs('ms1',this.value)">コンサルタント・士業・監査法人</label>
-          <label class="ms-item"><input type="checkbox" value="金融・保険・証券代行" onchange="updateMs('ms1',this.value)">金融・保険・証券代行</label>
-          <label class="ms-item"><input type="checkbox" value="教育・研究機関・学校法人" onchange="updateMs('ms1',this.value)">教育・研究機関・学校法人</label>
-          <label class="ms-item"><input type="checkbox" value="官公庁・自治体・各種団体等" onchange="updateMs('ms1',this.value)">官公庁・自治体・各種団体等</label>
-          <label class="ms-item"><input type="checkbox" value="ITサービス・AI・通信・Web3" onchange="updateMs('ms1',this.value)">ITサービス・AI・通信・Web3</label>
-          <label class="ms-item"><input type="checkbox" value="人材・HR系サービス" onchange="updateMs('ms1',this.value)">人材・HR系サービス</label>
-          <label class="ms-item"><input type="checkbox" value="製造業・食品・環境・エネルギー・バイオ・宇宙・農林水産" onchange="updateMs('ms1',this.value)">製造業・食品・環境・エネルギー等</label>
-          <label class="ms-item"><input type="checkbox" value="観光・エンタメ・スポーツ・アート" onchange="updateMs('ms1',this.value)">観光・エンタメ・スポーツ・アート</label>
-          <label class="ms-item"><input type="checkbox" value="医療・ヘルスケア・福祉・保育・シニア" onchange="updateMs('ms1',this.value)">医療・ヘルスケア・福祉・保育等</label>
-          <label class="ms-item"><input type="checkbox" value="商社・流通・小売・EC" onchange="updateMs('ms1',this.value)">商社・流通・小売・EC</label>
-          <label class="ms-item"><input type="checkbox" value="建設・不動産" onchange="updateMs('ms1',this.value)">建設・不動産</label>
-          <label class="ms-item"><input type="checkbox" value="広告・メディア・出版" onchange="updateMs('ms1',this.value)">広告・メディア・出版</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="こだわらない" onchange="updateSingleMs('ms1',this.value)">こだわらない</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="VC・CVC・エンジェル・投資事業" onchange="updateSingleMs('ms1',this.value)">VC・CVC・エンジェル・投資事業</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="M&A仲介会社・FA" onchange="updateSingleMs('ms1',this.value)">M&A仲介会社・FA</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="コンサルタント・士業・監査法人" onchange="updateSingleMs('ms1',this.value)">コンサルタント・士業・監査法人</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="金融・保険・証券代行" onchange="updateSingleMs('ms1',this.value)">金融・保険・証券代行</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="教育・研究機関・学校法人" onchange="updateSingleMs('ms1',this.value)">教育・研究機関・学校法人</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="官公庁・自治体・各種団体等" onchange="updateSingleMs('ms1',this.value)">官公庁・自治体・各種団体等</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="ITサービス・AI・通信・Web3" onchange="updateSingleMs('ms1',this.value)">ITサービス・AI・通信・Web3</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="人材・HR系サービス" onchange="updateSingleMs('ms1',this.value)">人材・HR系サービス</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="製造業・食品・環境・エネルギー・バイオ・宇宙・農林水産" onchange="updateSingleMs('ms1',this.value)">製造業・食品・環境・エネルギー等</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="観光・エンタメ・スポーツ・アート" onchange="updateSingleMs('ms1',this.value)">観光・エンタメ・スポーツ・アート</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="医療・ヘルスケア・福祉・保育・シニア" onchange="updateSingleMs('ms1',this.value)">医療・ヘルスケア・福祉・保育等</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="商社・流通・小売・EC" onchange="updateSingleMs('ms1',this.value)">商社・流通・小売・EC</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="建設・不動産" onchange="updateSingleMs('ms1',this.value)">建設・不動産</label>
+          <label class="ms-item"><input type="radio" name="ms1-radio" value="広告・メディア・出版" onchange="updateSingleMs('ms1',this.value)">広告・メディア・出版</label>
         </div>
       </div>
     </div>
@@ -316,6 +316,19 @@ if(isReq){btn.classList.toggle('invalid',vals.length===0);}
 document.querySelectorAll('#'+id+'-drop .ms-item').forEach(i=>i.classList.toggle('checked',i.querySelector('input').checked));
 }
 function getMs(id){return Array.from(document.querySelectorAll('#'+id+'-drop input:checked')).map(c=>c.value);}
+// ①業種は単一選択（ラジオボタン）用の更新処理
+function updateSingleMs(id,value){
+  const btn=document.getElementById(id+'-btn');
+  const txt=document.getElementById(id+'-text');
+  const isReq=reqMs.includes(id);
+  txt.textContent=value;
+  btn.classList.add('selected');
+  if(isReq)btn.classList.remove('invalid');
+  document.querySelectorAll('#'+id+'-drop .ms-item').forEach(i=>i.classList.toggle('checked',i.querySelector('input').checked));
+  // 単一選択なので選んだら閉じる
+  document.getElementById(id+'-drop').classList.remove('open');
+  btn.classList.remove('open');
+}
 // お気に入り・企業検索・カード表示・会いたいリクエストはアプリ2では非公開（管理者経由フローに変更のため未使用）
 async function doSearch(){
 const listed=document.getElementById('f-listed').value;
@@ -334,9 +347,9 @@ document.getElementById('results-section').scrollIntoView({behavior:'smooth'});
 }catch(e){alert('エラー: '+e.message);}
 finally{btn.textContent='✨ マッチングを申し込む';btn.disabled=false;}
 }
-function doReset(){document.querySelectorAll('.ms-dropdown input[type=checkbox]').forEach(c=>c.checked=false);['ms1','ms3','ms4','ms5','ms6','ms7','ms8','ms10'].forEach(id=>{const isReq=reqMs.includes(id);document.getElementById(id+'-text').textContent=isReq?'選択してください':'こだわらない';const btn=document.getElementById(id+'-btn');btn.classList.remove('selected');if(isReq)btn.classList.add('invalid');document.querySelectorAll('#'+id+'-drop .ms-item').forEach(i=>i.classList.remove('checked'));});document.getElementById('f-listed').selectedIndex=0;document.getElementById('f-ma').selectedIndex=0;document.getElementById('err-msg').classList.remove('show');document.getElementById('results-section').style.display='none';document.getElementById('submit-btn').style.display='';}
+function doReset(){document.querySelectorAll('.ms-dropdown input[type=checkbox],.ms-dropdown input[type=radio]').forEach(c=>c.checked=false);['ms1','ms3','ms4','ms5','ms6','ms7','ms8','ms10'].forEach(id=>{const isReq=reqMs.includes(id);document.getElementById(id+'-text').textContent=isReq?'選択してください':'こだわらない';const btn=document.getElementById(id+'-btn');btn.classList.remove('selected');if(isReq)btn.classList.add('invalid');document.querySelectorAll('#'+id+'-drop .ms-item').forEach(i=>i.classList.remove('checked'));});document.getElementById('f-listed').selectedIndex=0;document.getElementById('f-ma').selectedIndex=0;document.getElementById('err-msg').classList.remove('show');document.getElementById('results-section').style.display='none';document.getElementById('submit-btn').style.display='';}
 function saveAnswers(){const answers={industry:getMs('ms1'),listed:document.getElementById('f-listed').value,scale:getMs('ms3'),position:getMs('ms4'),years:getMs('ms5'),capital:getMs('ms6'),employees:getMs('ms7'),hiring:getMs('ms8'),ma:document.getElementById('f-ma').value,region:getMs('ms10')};localStorage.setItem('jssa_answers',JSON.stringify(answers));}
-function loadAnswers(){const saved=localStorage.getItem('jssa_answers');if(!saved)return;try{const answers=JSON.parse(saved);if(answers.listed)document.getElementById('f-listed').value=answers.listed;if(answers.ma)document.getElementById('f-ma').value=answers.ma;const map={ms1:'industry',ms3:'scale',ms4:'position',ms5:'years',ms6:'capital',ms7:'employees',ms8:'hiring',ms10:'region'};Object.keys(map).forEach(id=>{const savedVals=answers[map[id]]||[];if(savedVals.length>0){document.querySelectorAll('#'+id+'-drop input[type=checkbox]').forEach(c=>{if(savedVals.includes(c.value))c.checked=true;});updateMs(id,null);}});}catch(e){console.error('loadAnswers error:',e);}}
+function loadAnswers(){const saved=localStorage.getItem('jssa_answers');if(!saved)return;try{const answers=JSON.parse(saved);if(answers.listed)document.getElementById('f-listed').value=answers.listed;if(answers.ma)document.getElementById('f-ma').value=answers.ma;const map={ms1:'industry',ms3:'scale',ms4:'position',ms5:'years',ms6:'capital',ms7:'employees',ms8:'hiring',ms10:'region'};Object.keys(map).forEach(id=>{const savedVals=answers[map[id]]||[];if(savedVals.length>0){const inputType=id==='ms1'?'radio':'checkbox';document.querySelectorAll('#'+id+'-drop input[type='+inputType+']').forEach(c=>{if(savedVals.includes(c.value))c.checked=true;});if(id==='ms1'){updateSingleMs(id,savedVals[0]);}else{updateMs(id,null);}}});}catch(e){console.error('loadAnswers error:',e);}}
 function logout(){if(!confirm('ログアウトしますか？'))return;sessionStorage.clear();window.location.href='/login';}
 fetch('/.netlify/functions/counter',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.count)document.getElementById('counter-val').textContent=Number(d.count).toLocaleString();}).catch(()=>{});
 
