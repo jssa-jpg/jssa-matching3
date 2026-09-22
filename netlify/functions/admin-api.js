@@ -234,6 +234,35 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({success:true,items})};
     }
 
+    if(action==='getMemberOverview'){
+      // 紹介メール用に、会員自身の「事業概要」をAIで生成し、会社HPと合わせて返す
+      const{userId}=body;
+      if(!userId)return{statusCode:400,headers,body:JSON.stringify({error:'userIdが必要です'})};
+      const userRows=await getSheet(token,'ユーザー登録');
+      const idx=userRows.findIndex((r,i)=>i>0&&r[0]===userId);
+      if(idx<0)return{statusCode:404,headers,body:JSON.stringify({error:'ユーザーが見つかりません'})};
+      const u=userRows[idx];
+      const website=u[7]||'';
+      const profile={
+        fundingRound:u[12]||'',fundingTarget:u[13]||'',challenges:u[14]||'',globalExpansion:u[15]||'',kpi:u[16]||'',
+        supportCount:u[17]||'',supportArea:u[18]||'',investmentIndustry:u[19]||'',targetRound:u[20]||''
+      };
+      const isSupporter=!!(profile.supportCount||profile.supportArea||profile.investmentIndustry||profile.targetRound);
+      let overview='';
+      if(ANTHROPIC_API_KEY){
+        try{
+          const details=isSupporter
+            ?`支援実績件数：${profile.supportCount||'不明'}／得意な支援領域：${profile.supportArea||'不明'}／投資先・支援先の業種：${profile.investmentIndustry||'不明'}／対応可能なラウンド：${profile.targetRound||'不明'}`
+            :`調達ラウンド：${profile.fundingRound||'不明'}／調達希望額：${profile.fundingTarget||'不明'}／事業課題：${profile.challenges||'不明'}／海外展開：${profile.globalExpansion||'不明'}／主要KPI：${profile.kpi||'不明'}`;
+          const prompt=`以下は、他社に紹介するメールに載せる「事業概要」の一文です。会員企業の情報をもとに、80文字程度の自然な日本語で作成してください。説明文のみを出力し、前置きや見出しは不要です。\n\n会社名：${u[2]||''}\n立場：${isSupporter?'支援者（投資家・VC等）':'スタートアップ'}\n情報：${details}`;
+          const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,messages:[{role:'user',content:prompt}]})});
+          const aiData=await aiRes.json();
+          overview=(aiData.content&&aiData.content[0]?aiData.content[0].text:'').trim();
+        }catch(e){console.error('事業概要生成エラー:',e.message);}
+      }
+      return{statusCode:200,headers,body:JSON.stringify({success:true,website,overview})};
+    }
+
     if(action==='getCompanyContacts'){
       // ⑤ 対象企業の役職者一覧を取得（同じ会社名で複数の名刺データがある場合に選択できるようにする）
       const{targetCompany}=body;

@@ -509,7 +509,26 @@ function openDetail(r){
   </div>`;
   document.getElementById('edit-msg').oninput=function(){document.getElementById('edit-char').textContent=this.value.length+'/2000';};
   area.scrollIntoView({behavior:'smooth'});
+  currentMemberOverview={website:'',overview:'',loaded:false};
   loadCompanyContacts(r);
+  loadMemberOverview(r);
+}
+
+let currentMemberOverview={website:'',overview:'',loaded:false};
+
+async function loadMemberOverview(r){
+  if(!r.userId)return;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getMemberOverview',userId:r.userId})});
+    const data=await res.json();
+    if(data.success){
+      currentMemberOverview={website:data.website||'',overview:data.overview||'',loaded:true};
+      const sel=document.getElementById('contact-select');
+      const idx=sel?sel.value:'';
+      const contact=(idx!==''&&currentContacts[idx])?currentContacts[idx]:null;
+      buildDefaultMsg(r,contact);
+    }
+  }catch(e){console.error('loadMemberOverview error:',e);}
 }
 
 let currentContacts=[];
@@ -543,8 +562,13 @@ function onContactChange(r){
 function buildDefaultMsg(r,contact){
   const toName=contact?.name||'';
   const toPosition=contact?.position||r.targetPosition||'';
-  const header=`${r.targetCompany||''}${toPosition?' '+toPosition:''}${toName?' '+toName+'様':' 担当者様'}`;
-  const defaultMsg=`${header}\n\n日本スタートアップ支援協会（JSSA）の岡隆宏と申します。\n平素よりお世話になっております。\n\nこの度、弊協会の会員企業より、貴社との面談・情報交換のご希望をいただきましたので、ご紹介させていただきます。\n${r.matchReason?'\n【推薦理由】\n'+r.matchReason+'との判断により、ご推薦させていただきます。\n':''}\n【ご紹介する会員】\n会社名：${r.memberCompany||'—'}\n氏名　：${r.memberName||'—'}\nメール：${r.memberEmail||'—'}\n\nご都合がよろしければ、直接${r.memberName||''}様にご連絡いただけますと幸いです。\nご不明な点がございましたら、私（岡）までお気軽にご連絡ください。\n\n今後ともどうぞよろしくお願いいたします。`;
+  const addressBlock=`${r.targetCompany||''}\n${toPosition||'ご担当者'}\n${toName?toName+'様':'ご担当者様'}`;
+  const memberName=r.memberName||'—';
+  const memberCompany=r.memberCompany||'—';
+  const purposeLine=r.matchReason?`${memberName}様は${r.matchReason}との接点を希望されており、貴社をご紹介したくご連絡しました。`:`${memberName}様が貴社との面談をご希望されており、ご紹介したくご連絡しました。`;
+  const overview=currentMemberOverview.loaded?(currentMemberOverview.overview||'（情報なし）'):'（事業概要を生成中です…）';
+  const website=currentMemberOverview.loaded?(currentMemberOverview.website||'（未登録）'):'（読み込み中…）';
+  const defaultMsg=`${addressBlock}\n\nいつもお世話になっております。日本スタートアップ支援協会（JSSA）の岡隆宏です。\nこのたび、弊協会の会員企業である${memberCompany}の${memberName}様から、貴社と面談し、情報交換をしたいとのご希望をいただきました。${purposeLine}\n\n【ご紹介する会員】\n会社名：${memberCompany}\nお名前：${memberName}様\n事業概要：${overview}\n会社HP：${website}\n\nご面談をご検討いただける場合は、本メールにその旨をご返信いただけますでしょうか。私から${memberName}様を加えたメールでおつなぎしますので、その後、日程をご調整いただければ幸いです。\nご返信の際は、件名を変更せずにお願いいたします。\nどうぞよろしくお願いいたします。`;
   const ta=document.getElementById('edit-msg');
   ta.value=defaultMsg;
   document.getElementById('edit-char').textContent=defaultMsg.length+'/2000';
@@ -565,7 +589,7 @@ async function sendRecommendation(r){
   const btn=document.getElementById('btn-send');
   btn.textContent='送信中...';btn.disabled=true;
   try{
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendRecommendation',rowIndex:r.rowIndex,targetCompany:r.targetCompany,targetPosition:r.targetPosition,memberCompany:r.memberCompany,memberName:r.memberName,memberEmail:r.memberEmail,memberPosition:r.targetPosition,emailBody:msg,matchReason:r.matchReason,targetContactEmail:contact?.email,targetContactName:contact?.name,targetContactPosition:contact?.position})});
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendRecommendation',rowIndex:r.rowIndex,targetCompany:r.targetCompany,targetPosition:r.targetPosition,memberCompany:r.memberCompany,memberName:r.memberName,memberEmail:r.memberEmail,memberPosition:r.targetPosition,memberWebsite:currentMemberOverview.website,emailBody:msg,matchReason:r.matchReason,targetContactEmail:contact?.email,targetContactName:contact?.name,targetContactPosition:contact?.position})});
     const data=await res.json();
     if(data.success){closeDetail();alert('推薦メールを送信しました！');loadRequests();}
     else alert('エラー: '+(data.error||'送信失敗'));
