@@ -84,7 +84,8 @@ exports.handler=async(event)=>{
       }
       const userId='U'+Date.now();
       const now=new Date().toISOString();
-      await appendRow(token,'ユーザー登録',[userId,company,position,name,email,mobile,website||'',facebook||'',now,now,'1']);
+      // L〜S列はプロフィール情報用に予約されているため空欄で確保し、T列に請求書管理番号（招待コード）を記録する
+      await appendRow(token,'ユーザー登録',[userId,company,position,name,email,mobile,website||'',facebook||'',now,now,'1','','','','','','','','',inviteCode]);
 
       // 招待コードを使用済みに更新
       const id=process.env.GOOGLE_SHEET_ID;
