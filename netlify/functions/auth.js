@@ -43,14 +43,6 @@ exports.handler=async(event)=>{
 
     const token=await getAccessToken();
 
-    // 招待コード確認
-    const inviteRows=await getSheet(token,'招待コード');
-    const inviteIndex=inviteRows.findIndex((r,i)=>i>0&&r[0]===inviteCode&&r[4]==='有効');
-    if(inviteIndex<0){
-      return{statusCode:401,headers,body:JSON.stringify({error:'招待コードが無効です。事務局にお問い合わせください。'})};
-    }
-    const memberRank=inviteRows[inviteIndex][6]||'レギュラー';
-
     const userRows=await getSheet(token,'ユーザー登録');
     const existingIndex=userRows.findIndex((r,i)=>i>0&&r[5]===email);
 
@@ -59,6 +51,14 @@ exports.handler=async(event)=>{
         return{statusCode:404,headers,body:JSON.stringify({error:'登録されていません。新規登録してください。',needRegister:true})};
       }
       const r=userRows[existingIndex];
+      // ログイン時は「登録済みの請求書番号と一致するか」だけを確認する（招待コードの有効/使用済ステータスは見ない）
+      if((r[1]||'')!==inviteCode){
+        return{statusCode:401,headers,body:JSON.stringify({error:'請求書番号またはメールアドレスが正しくありません。'})};
+      }
+      // 会員ランクは請求書番号から取得（使用済でも参照可能。見つからない場合はレギュラー扱い）
+      const inviteRows=await getSheet(token,'招待コード');
+      const inviteRow=inviteRows.find((row,i)=>i>0&&row[0]===inviteCode);
+      const memberRank=(inviteRow&&inviteRow[6])||'レギュラー';
       await updateRow(token,'ユーザー登録',existingIndex+1,[r[0],r[1],r[2],r[3],r[4],r[5],r[6]||'',r[7]||'',r[8],r[9],new Date().toISOString(),'1']);
       return{statusCode:200,headers,body:JSON.stringify({
         success:true,
@@ -82,6 +82,13 @@ exports.handler=async(event)=>{
       if(existingIndex>=0){
         return{statusCode:409,headers,body:JSON.stringify({error:'このメールアドレスは既に登録されています。ログインしてください。',needLogin:true})};
       }
+      // 新規登録の場合のみ、招待コードが「有効（未使用）」であることを確認する
+      const inviteRows=await getSheet(token,'招待コード');
+      const inviteIndex=inviteRows.findIndex((r,i)=>i>0&&r[0]===inviteCode&&r[4]==='有効');
+      if(inviteIndex<0){
+        return{statusCode:401,headers,body:JSON.stringify({error:'招待コードが無効です。事務局にお問い合わせください。'})};
+      }
+      const memberRank=inviteRows[inviteIndex][6]||'レギュラー';
       const userId='U'+Date.now();
       const now=new Date().toISOString();
       // A:ユーザーID B:請求書番号 C:会社名 D:役職 E:氏名 F:メール G:携帯電話 H:会社HP I:FacebookURL J:登録日時 K:最終ログイン L:共通パスワード確認済
