@@ -82,7 +82,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#0B0F1A;color:#fff;mi
       <input class="finput" type="email" id="reg-email" placeholder="your@email.com">
       <label class="flabel">携帯電話番号<span class="rb">必須</span></label>
       <input class="finput" type="tel" id="reg-mobile" placeholder="090-0000-0000">
-      <label class="flabel">会社HP<span class="ob">任意</span></label>
+      <label class="flabel">会社HP<span class="rb">必須</span></label>
       <input class="finput" type="url" id="reg-website" placeholder="https://www.example.com">
       <label class="flabel">FacebookプロフィールURL<span class="ob">任意</span></label>
       <input class="finput" type="url" id="reg-facebook" placeholder="https://www.facebook.com/yourname">
@@ -153,7 +153,7 @@ async function doRegister(){
   const facebook=document.getElementById('reg-facebook').value.trim();
   const err=document.getElementById('reg-err');
   err.classList.remove('show');
-  if(!inviteCode||!company||!position||!name||!email||!mobile){
+  if(!inviteCode||!company||!position||!name||!email||!mobile||!website){
     err.textContent='必須項目を全て入力してください';err.classList.add('show');return;
   }
   const btn=document.getElementById('reg-btn');

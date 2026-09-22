@@ -82,7 +82,7 @@ exports.handler=async(event)=>{
     }
 
     if(action==='register'){
-      if(!company||!position||!name||!email||!mobile){
+      if(!company||!position||!name||!email||!mobile||!website){
         return{statusCode:400,headers,body:JSON.stringify({error:'必須項目を全て入力してください'})};
       }
       const id=process.env.GOOGLE_SHEET_ID;
