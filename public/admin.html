@@ -290,7 +290,7 @@ async function sendCompanyNames(batch){
   try{
     const rowIndexes=chosenDetailed.map(c=>c.rowIndex);
     const companies=chosenDetailed.map(c=>c.company);
-    const companyDetails=chosenDetailed.map(c=>({name:c.company,reason:c.recommendation||''}));
+    const companyDetails=chosenDetailed.map(c=>({name:c.company,overview:c.features||'',reason:c.recommendation||''}));
     const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendCompanyNames',batchId:batch.batchId,rowIndexes,userEmail:batch.userEmail,userName:batch.userName,userId:batch.userId,memberRank:batch.memberRank,companies,companyDetails})});
     const data=await res.json();
     if(data.success){alert('企業名一覧を送信しました');delete selectedCompanies[batch.batchId];loadMatchResults();}
