@@ -3,7 +3,7 @@ let cacheTime = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 
 // 会員ランク別の月間紹介上限（岡代表が採択して送信した企業数でカウント）
-const MONTHLY_LIMITS = { 'レギュラーライト': 1, 'レギュラー': 2, 'プライム': 5, 'ライト': 1, '特待生': 2, 'default': 3 };
+const MONTHLY_LIMITS = { 'レギュラーライト': 1, 'レギュラー': 2, 'プライム': 5, 'ライト': 1, '特待生': 2, '投資先': 10, 'default': 3 };
 
 async function getParticipants() {
   const now = Date.now();
