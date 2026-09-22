@@ -108,12 +108,29 @@ exports.handler=async(event)=>{
         targetCompany:r[6]||'',score:r[7]||'',status:r[8]||'未通知',
         aiParamsJson:r[9]||'',cardRow:parseInt(r[10])||0,memberRank:r[11]||'default'
       }));
+      // 申込者自身のプロフィール情報（スタートアップ情報/支援者情報）をユーザー登録シートから取得
+      const userRows=await getSheet(token,'ユーザー登録');
+      const userMap={};
+      userRows.slice(1).forEach(u=>{
+        const uid=u[0]||'';
+        if(!uid)return;
+        const supporterFilled=u[17]||u[18]||u[19]||u[20]||u[25]||u[26];
+        const startupFilled=u[12]||u[13]||u[14]||u[15]||u[16]||u[24];
+        const profileType=supporterFilled?'supporter':(startupFilled?'startup':'');
+        userMap[uid]={
+          profileType,
+          fundingRound:u[12]||'',fundingTarget:u[13]||'',challenges:u[14]||'',globalExpansion:u[15]||'',kpi:u[16]||'',
+          supportCount:u[17]||'',supportArea:u[18]||'',investmentIndustry:u[19]||'',targetRound:u[20]||'',
+          ma:u[21]||'',secondaryMarket:u[22]||'',hiringNeeds:u[23]||'',stockOption:u[24]||'',
+          ventureInvestment:u[25]||'',lpInvestment:u[26]||''
+        };
+      });
       const batches={};
       for(const it of items){
         if(!batches[it.batchId]){
           let aiParams={};
           try{aiParams=JSON.parse(it.aiParamsJson||'{}');}catch(e){aiParams={};}
-          batches[it.batchId]={batchId:it.batchId,createdAt:it.createdAt,userId:it.userId,userCompany:it.userCompany,userName:it.userName,userEmail:it.userEmail,status:it.status,aiParams,memberRank:it.memberRank,companies:[]};
+          batches[it.batchId]={batchId:it.batchId,createdAt:it.createdAt,userId:it.userId,userCompany:it.userCompany,userName:it.userName,userEmail:it.userEmail,status:it.status,aiParams,memberRank:it.memberRank,userProfile:userMap[it.userId]||null,companies:[]};
         }
         batches[it.batchId].companies.push({rowIndex:it.rowIndex,targetCompany:it.targetCompany,score:it.score,status:it.status,cardRow:it.cardRow});
         // バッチ全体のステータスは「1件でも未通知があれば未通知」とする

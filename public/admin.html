@@ -55,6 +55,11 @@ header{background:#000F1A;padding:0;position:sticky;top:0;z-index:100}
 .msg-box{background:#f9fafb;border-radius:8px;padding:12px;font-size:12px;color:#374151;line-height:1.6;margin-bottom:12px;border:1px solid #e5e7eb}
 .reason-box{background:#f0f9e8;border-radius:8px;padding:12px;font-size:12px;color:#374151;line-height:1.6;margin-bottom:12px;border:1px solid #c0dd97}
 .select-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.applicant-profile{background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#1e3a5f}
+.applicant-profile .ap-title{font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:6px}
+.applicant-profile .ap-row{display:flex;flex-wrap:wrap;gap:4px 16px;line-height:1.8}
+.applicant-profile b{color:#0B0F1A}
+.applicant-profile.empty{color:#6b7280;font-style:italic}
 .sel-btns{display:flex;gap:6px}
 .sel-btn{background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;font-size:11px;color:#374151;cursor:pointer}
 .sel-btn:hover{background:#f3f4f6}
@@ -337,11 +342,43 @@ function renderCards(){
         </div>`;
       }).join('');
       const loadMoreLabel=loaded.length===0?'詳細を表示（先頭10社）':`次の10社を表示（残り${totalCount-loaded.length}社）`;
+      const up=b.userProfile;
+      let profileHtml;
+      if(!up||!up.profileType){
+        profileHtml=`<div class="applicant-profile empty">プロフィール情報が未登録です</div>`;
+      }else if(up.profileType==='startup'){
+        const rows=[
+          up.fundingRound?`<span><b>調達ラウンド:</b> ${up.fundingRound}</span>`:'',
+          up.fundingTarget?`<span><b>調達希望額:</b> ${up.fundingTarget}</span>`:'',
+          up.challenges?`<span><b>事業課題:</b> ${up.challenges}</span>`:'',
+          up.globalExpansion?`<span><b>海外展開:</b> ${up.globalExpansion}</span>`:'',
+          up.kpi?`<span><b>主要KPI:</b> ${up.kpi}</span>`:'',
+          up.ma?`<span><b>M&A:</b> ${up.ma}</span>`:'',
+          up.stockOption?`<span><b>ストックオプション:</b> ${up.stockOption}</span>`:'',
+          up.secondaryMarket?`<span><b>セカンダリーマーケット:</b> ${up.secondaryMarket}</span>`:'',
+          up.hiringNeeds?`<span><b>人材採用ニーズ:</b> ${up.hiringNeeds}</span>`:''
+        ].filter(Boolean).join('');
+        profileHtml=`<div class="applicant-profile"><div class="ap-title">🚀 スタートアップ情報</div><div class="ap-row">${rows||'（未回答）'}</div></div>`;
+      }else{
+        const rows=[
+          up.supportCount?`<span><b>支援実績件数:</b> ${up.supportCount}</span>`:'',
+          up.supportArea?`<span><b>得意な支援領域:</b> ${up.supportArea}</span>`:'',
+          up.investmentIndustry?`<span><b>投資先・支援先の業種:</b> ${up.investmentIndustry}</span>`:'',
+          up.targetRound?`<span><b>対応可能なラウンド:</b> ${up.targetRound}</span>`:'',
+          up.ma?`<span><b>M&A:</b> ${up.ma}</span>`:'',
+          up.secondaryMarket?`<span><b>セカンダリーマーケット:</b> ${up.secondaryMarket}</span>`:'',
+          up.ventureInvestment?`<span><b>ベンチャー投資:</b> ${up.ventureInvestment}</span>`:'',
+          up.lpInvestment?`<span><b>LP投資:</b> ${up.lpInvestment}</span>`:'',
+          up.hiringNeeds?`<span><b>人材採用ニーズ:</b> ${up.hiringNeeds}</span>`:''
+        ].filter(Boolean).join('');
+        profileHtml=`<div class="applicant-profile"><div class="ap-title">🤝 支援者情報</div><div class="ap-row">${rows||'（未回答）'}</div></div>`;
+      }
       return `<div class="card">
         <div class="card-head">
           <div><div class="card-title">${b.userCompany||'—'} ${b.userName||''}</div><div class="card-sub">${b.userEmail||''} | ${b.createdAt?b.createdAt.slice(0,10):''} | ${totalCount}社マッチ</div></div>
           ${statusBadge}
         </div>
+        ${profileHtml}
         ${loaded.length>0?`<div class="select-toolbar">
           <div class="sel-btns">
             <button class="sel-btn" onclick="selectAllLoaded('${b.batchId}',true)">表示中を全選択</button>
