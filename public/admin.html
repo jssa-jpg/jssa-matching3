@@ -131,7 +131,7 @@ textarea:focus{border-color:#639922}
     </div>
     <div class="tabs">
       <button class="tab" onclick="setTab('matches')">📋 マッチング結果</button>
-      <button class="tab active" onclick="setTab('all')">すべて</button>
+      <button class="tab active" onclick="setTab('all')">ユーザー返信</button>
       <button class="tab" onclick="setTab('new')">未処理</button>
       <button class="tab" onclick="setTab('done')">承認済み</button>
       <button class="tab" onclick="setTab('ng')">却下</button>
@@ -304,7 +304,7 @@ async function addRequestFromReply(batch){
   try{
     const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'addRequest',userId:batch.userId,userCompany:batch.userCompany,userName:batch.userName,userEmail:batch.userEmail,targetCompany:company})});
     const data=await res.json();
-    if(data.success){alert('「会いたいリクエスト」に追加しました。「すべて」タブから役職者選定・プロフィール送信の作業を進めてください。');setTab('all');await loadRequests();}
+    if(data.success){alert('「会いたいリクエスト」に追加しました。「ユーザー返信」タブから役職者選定・プロフィール送信の作業を進めてください。');setTab('all');await loadRequests();}
     else{alert(data.error||'追加に失敗しました');}
   }catch(e){alert('エラー: '+e.message);}
 }
@@ -420,7 +420,7 @@ function renderCards(){
         ${hasMore?`<button class="load-more-btn" id="loadmore-${b.batchId}" onclick="loadNextCompanies('${b.batchId}')">${loadMoreLabel}</button>`:''}
         ${loaded.length>0?`<div class="actions">
           <button class="btn-approve" onclick='sendCompanyNames(${JSON.stringify(b).replace(/'/g,"&#39;")})'>📧 採択した企業だけメール送信</button>
-          <button class="btn-decline" onclick='addRequestFromReply(${JSON.stringify(b).replace(/'/g,"&#39;")})'>💬 ユーザー返信を登録</button>
+          <button class="btn-decline" onclick='addRequestFromReply(${JSON.stringify(b).replace(/'/g,"&#39;")})'>💬 ユーザー希望企業を登録</button>
         </div>`:''}
         <div class="actions" style="margin-top:6px">
           <button class="sel-btn" onclick='changeMemberRank(${JSON.stringify(b).replace(/'/g,"&#39;")})'>🎖 会員ランクを変更（現在: ${b.memberRank||'default'}）</button>
@@ -476,7 +476,7 @@ function renderCards(){
       ${r.matchReason?`<div class="reason-box">🎯 ${r.matchReason}</div>`:''}
       ${r.message?`<div class="msg-box">${r.message}</div>`:''}
       <div class="actions">
-        <button class="btn-approve" onclick='openDetail(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✅ 推薦メール送信</button>
+        <button class="btn-approve" onclick='openDetail(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✅ 担当者選択</button>
         <button class="btn-decline" onclick='doDecline(${JSON.stringify(r).replace(/'/g,"&#39;")})'>❌ 見送り</button>
         <button class="btn-delete" onclick='doDelete(${JSON.stringify(r).replace(/'/g,"&#39;")})' title="ゴミ箱へ">🗑</button>
       </div>
