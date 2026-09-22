@@ -165,30 +165,79 @@ async function getMonthlyRequestCount(userId) {
   }
 }
 
-// 任意の件数（岡代表が採択して送信した企業数など）を月次カウントに加算する
-async function incrementMonthlyRequestCount(userId, count) {
+// 'YYYY-MM' 形式の2つの年月の差（月数）を計算する
+function _monthDiff(fromYM, toYM) {
+  const [fy, fm] = (fromYM || '').split('-').map(Number);
+  const [ty, tm] = (toYM || '').split('-').map(Number);
+  if (!fy || !fm || !ty || !tm) return 0;
+  return (ty - fy) * 12 + (tm - fm);
+}
+
+async function _readBalanceRows(token, sheetId) {
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E6%9C%88%E6%AC%A1%E3%83%AA%E3%82%AF%E3%82%A8%E3%82%B9%E3%83%88%E6%95%B0`,
+    { headers: { 'Authorization': `Bearer ${token}` } }
+  );
+  const data = await res.json();
+  return data.values || [];
+}
+
+// 会員の現在の紹介可能残高を取得する。未使用分は繰り越されるが、上限は「月次上限の2か月分」まで。
+// 列: A=ユーザーID, B=最終更新年月, C=残高
+async function getUserBalance(userId, limit) {
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const yearMonth = new Date().toISOString().slice(0, 7);
+    const cap = limit * 2;
+    const rows = await _readBalanceRows(token, sheetId);
+    const rowIndex = rows.findIndex(r => r[0] === String(userId));
+    if (rowIndex < 0) {
+      // 初回アクセス：今月分の上限をそのまま付与して記録
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(limit)]] }) });
+      return limit;
+    }
+    const lastMonth = rows[rowIndex][1] || yearMonth;
+    let balance = parseInt(rows[rowIndex][2] || '0');
+    const months = _monthDiff(lastMonth, yearMonth);
+    if (months > 0) {
+      balance = Math.min(balance + limit * months, cap);
+      const range = `月次リクエスト数!B${rowIndex + 1}:C${rowIndex + 1}`;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[yearMonth, String(balance)]] }) });
+    }
+    return balance;
+  } catch (e) {
+    console.error('getUserBalance error:', e.message);
+    return limit;
+  }
+}
+
+// 岡代表が採択して送信した企業数の分だけ、繰り越し反映後の残高から差し引く
+async function decrementUserBalance(userId, limit, count) {
   try {
     if (!userId || !count) return;
     const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     const sheetId = process.env.GOOGLE_SHEET_ID;
     const token = await getAccessToken(serviceAccount);
     const yearMonth = new Date().toISOString().slice(0, 7);
-    const getRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E6%9C%88%E6%AC%A1%E3%83%AA%E3%82%AF%E3%82%A8%E3%82%B9%E3%83%88%E6%95%B0`,
-      { headers: { 'Authorization': `Bearer ${token}` } }
-    );
-    const getData = await getRes.json();
-    const rows = getData.values || [];
-    const rowIndex = rows.findIndex(r => r[0] === String(userId) && r[1] === yearMonth);
-    if (rowIndex >= 0) {
-      const currentCount = parseInt(rows[rowIndex][2] || '0');
-      const range = `月次リクエスト数!C${rowIndex + 1}`;
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(currentCount + count)]] }) });
-    } else {
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(count)]] }) });
+    const cap = limit * 2;
+    const rows = await _readBalanceRows(token, sheetId);
+    const rowIndex = rows.findIndex(r => r[0] === String(userId));
+    if (rowIndex < 0) {
+      const balance = limit - count;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
+      return;
     }
+    const lastMonth = rows[rowIndex][1] || yearMonth;
+    let balance = parseInt(rows[rowIndex][2] || '0');
+    const months = _monthDiff(lastMonth, yearMonth);
+    if (months > 0) balance = Math.min(balance + limit * months, cap);
+    balance -= count;
+    const range = `月次リクエスト数!B${rowIndex + 1}:C${rowIndex + 1}`;
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[yearMonth, String(balance)]] }) });
   } catch (e) {
-    console.error('incrementMonthlyRequestCount error:', e.message);
+    console.error('decrementUserBalance error:', e.message);
   }
 }
 
@@ -202,10 +251,11 @@ async function saveMatchResultsForReview(userId, userInfo, matches, aiParams) {
     const now = new Date().toISOString();
     const batchId = `${String(userId || 'guest')}_${now}`;
     const aiParamsJson = JSON.stringify(aiParams || {});
-    // 列: バッチID, 日時, ユーザーID, ユーザー会社名, ユーザー氏名, ユーザーメール, マッチ企業名, スコア, ステータス（未通知/企業名送信済み）, アンケート回答JSON, 名刺データ上の行番号
+    const memberRank = userInfo.memberRank || 'default';
+    // 列: バッチID, 日時, ユーザーID, ユーザー会社名, ユーザー氏名, ユーザーメール, マッチ企業名, スコア, ステータス（未通知/企業名送信済み）, アンケート回答JSON, 名刺データ上の行番号, ユーザー会員ランク
     const values = matches.map(m => [
       batchId, now, String(userId || ''), userInfo.company || '', userInfo.name || '',
-      userInfo.email || '', m.company, String(m.score || ''), '未通知', aiParamsJson, String(m.cardRow || '')
+      userInfo.email || '', m.company, String(m.score || ''), '未通知', aiParamsJson, String(m.cardRow || ''), memberRank
     ]);
     await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('マッチング結果')}:append?valueInputOption=RAW`,
@@ -246,4 +296,4 @@ async function getAccessToken(serviceAccount) {
   return data.access_token;
 }
 
-module.exports = { getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, incrementMonthlyRequestCount, saveMatchResultsForReview, MONTHLY_LIMITS };
+module.exports = { getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };

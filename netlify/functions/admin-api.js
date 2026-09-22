@@ -1,4 +1,4 @@
-const{getParticipants,incrementMonthlyRequestCount}=require('./sheets-helper');
+const{getParticipants,decrementUserBalance,MONTHLY_LIMITS}=require('./sheets-helper');
 const RESEND_API_KEY=process.env.RESEND_API_KEY;
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const OFFICE_EMAIL='tok@yumeplanning.jp';
@@ -106,14 +106,14 @@ exports.handler=async(event)=>{
         rowIndex:i+2,batchId:r[0]||'',createdAt:r[1]||'',userId:r[2]||'',
         userCompany:r[3]||'',userName:r[4]||'',userEmail:r[5]||'',
         targetCompany:r[6]||'',score:r[7]||'',status:r[8]||'未通知',
-        aiParamsJson:r[9]||'',cardRow:parseInt(r[10])||0
+        aiParamsJson:r[9]||'',cardRow:parseInt(r[10])||0,memberRank:r[11]||'default'
       }));
       const batches={};
       for(const it of items){
         if(!batches[it.batchId]){
           let aiParams={};
           try{aiParams=JSON.parse(it.aiParamsJson||'{}');}catch(e){aiParams={};}
-          batches[it.batchId]={batchId:it.batchId,createdAt:it.createdAt,userId:it.userId,userCompany:it.userCompany,userName:it.userName,userEmail:it.userEmail,status:it.status,aiParams,companies:[]};
+          batches[it.batchId]={batchId:it.batchId,createdAt:it.createdAt,userId:it.userId,userCompany:it.userCompany,userName:it.userName,userEmail:it.userEmail,status:it.status,aiParams,memberRank:it.memberRank,companies:[]};
         }
         batches[it.batchId].companies.push({rowIndex:it.rowIndex,targetCompany:it.targetCompany,score:it.score,status:it.status,cardRow:it.cardRow});
         // バッチ全体のステータスは「1件でも未通知があれば未通知」とする
@@ -166,7 +166,7 @@ exports.handler=async(event)=>{
 
     if(action==='sendCompanyNames'){
       // ③ 岡代表が確認した企業名のみをユーザーにメール送信する
-      const{batchId,rowIndexes,userEmail,userName,companies,userId}=body;
+      const{batchId,rowIndexes,userEmail,userName,companies,userId,memberRank}=body;
       if(!userEmail)return{statusCode:400,headers,body:JSON.stringify({error:'送信先メールアドレスがありません'})};
       const list=(companies||[]).map((c,i)=>`${i+1}. ${c}`).join('\n');
       const mailText=`${userName||''} 様\n\n日本スタートアップ支援協会（JSSA）の岡隆宏です。\n平素よりお世話になっております。\n\nご登録いただいたご希望条件をもとに、AIマッチングシステムにて相性の良い企業様を選定いたしましたので、以下の通りご案内いたします。\n\n【マッチング企業一覧】\n${list}\n\nこの中で面談・情報交換をご希望される企業様がございましたら、本メールに返信する形で会社名をお知らせください。\n担当役職者の方をこちらで選定の上、あらためてご連絡いたします。\n\n${SIGNATURE}`;
@@ -176,9 +176,10 @@ exports.handler=async(event)=>{
       if(Array.isArray(rowIndexes)){
         for(const idx of rowIndexes){await updateCell(token,'マッチング結果',idx,'I','企業名送信済み');}
       }
-      // 岡代表が採択して送信した企業数を、会員の月次カウントに加算する
+      // 岡代表が採択して送信した企業数を、会員ランクに応じた上限（繰り越し上限2か月分）から差し引く
       if(userId&&Array.isArray(companies)&&companies.length>0){
-        try{await incrementMonthlyRequestCount(userId,companies.length);}catch(e){console.error('月次カウント加算エラー:',e.message);}
+        const limit=MONTHLY_LIMITS[memberRank]||MONTHLY_LIMITS['default'];
+        try{await decrementUserBalance(userId,limit,companies.length);}catch(e){console.error('残高減算エラー:',e.message);}
       }
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:'企業名一覧を送信しました'})};
     }
