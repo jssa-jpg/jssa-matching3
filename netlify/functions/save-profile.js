@@ -33,7 +33,7 @@ exports.handler=async(event)=>{
     const rows=data.values||[];
 
     // userIdまたはcompanyで検索
-    const rowIndex=rows.findIndex((r,i)=>i>0&&(r[0]===userId||r[1]===company));
+    const rowIndex=rows.findIndex((r,i)=>i>0&&(r[0]===userId||r[2]===company));
 
     if(rowIndex<0){
       // ユーザーが見つからない場合はスキップして成功を返す
@@ -41,20 +41,20 @@ exports.handler=async(event)=>{
     }
 
     const row=rowIndex+1;
-    // K列以降にプロフィール情報を追加
+    // M列以降にプロフィール情報を保存（kpiを含む9項目）
     const profileValues=[[
       profile.fundingRound||'',
       profile.fundingTarget||'',
       profile.challenges||'',
       profile.globalExpansion||'',
-    
+      profile.kpi||'',
       profile.supportCount||'',
       profile.supportArea||'',
       profile.investmentIndustry||'',
       profile.targetRound||''
     ]];
 
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`ユーザー登録!L${row}:S${row}`)}?valueInputOption=RAW`,{
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`ユーザー登録!M${row}:U${row}`)}?valueInputOption=RAW`,{
       method:'PUT',
       headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
       body:JSON.stringify({values:profileValues})

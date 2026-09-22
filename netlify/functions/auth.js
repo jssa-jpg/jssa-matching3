@@ -52,24 +52,24 @@ exports.handler=async(event)=>{
     const memberRank=inviteRows[inviteIndex][6]||'レギュラー';
 
     const userRows=await getSheet(token,'ユーザー登録');
-    const existingIndex=userRows.findIndex((r,i)=>i>0&&r[4]===email);
+    const existingIndex=userRows.findIndex((r,i)=>i>0&&r[5]===email);
 
     if(action==='login'){
       if(existingIndex<0){
         return{statusCode:404,headers,body:JSON.stringify({error:'登録されていません。新規登録してください。',needRegister:true})};
       }
       const r=userRows[existingIndex];
-      await updateRow(token,'ユーザー登録',existingIndex+1,[r[0],r[1],r[2],r[3],r[4],r[5],r[6]||'',r[7]||'',r[8],new Date().toISOString(),'1']);
+      await updateRow(token,'ユーザー登録',existingIndex+1,[r[0],r[1],r[2],r[3],r[4],r[5],r[6]||'',r[7]||'',r[8],r[9],new Date().toISOString(),'1']);
       return{statusCode:200,headers,body:JSON.stringify({
         success:true,
         user:{
-          id:r[0],company:r[1],position:r[2],name:r[3],email:r[4],
-          mobile:r[5],website:r[6]||'',facebook:r[7]||'',
+          id:r[0],inviteCode:r[1]||'',company:r[2],position:r[3],name:r[4],email:r[5],
+          mobile:r[6],website:r[7]||'',facebook:r[8]||'',
           memberRank,
           profile:{
-            fundingRound:r[11]||'',fundingTarget:r[12]||'',challenges:r[13]||'',
-            globalExpansion:r[14]||'',kpi:r[15]||'',supportCount:r[16]||'',
-            supportArea:r[17]||'',investmentIndustry:r[18]||'',targetRound:r[19]||''
+            fundingRound:r[12]||'',fundingTarget:r[13]||'',challenges:r[14]||'',
+            globalExpansion:r[15]||'',kpi:r[16]||'',supportCount:r[17]||'',
+            supportArea:r[18]||'',investmentIndustry:r[19]||'',targetRound:r[20]||''
           }
         }
       })};
@@ -84,8 +84,9 @@ exports.handler=async(event)=>{
       }
       const userId='U'+Date.now();
       const now=new Date().toISOString();
-      // L〜S列はプロフィール情報用に予約されているため空欄で確保し、T列に請求書番号（招待コード）を記録する
-      await appendRow(token,'ユーザー登録',[userId,company,position,name,email,mobile,website||'',facebook||'',now,now,'1','','','','','','','','',inviteCode]);
+      // A:ユーザーID B:請求書番号 C:会社名 D:役職 E:氏名 F:メール G:携帯電話 H:会社HP I:FacebookURL J:登録日時 K:最終ログイン L:共通パスワード確認済
+      // M〜U列（9列）はプロフィール情報用に予約
+      await appendRow(token,'ユーザー登録',[userId,inviteCode,company,position,name,email,mobile,website||'',facebook||'',now,now,'1','','','','','','','','','']);
 
       // 招待コードを使用済みに更新
       const id=process.env.GOOGLE_SHEET_ID;
@@ -97,7 +98,7 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({
         success:true,
         user:{
-          id:userId,company,position,name,email,mobile,
+          id:userId,inviteCode,company,position,name,email,mobile,
           website:website||'',facebook:facebook||'',
           memberRank,
           profile:{fundingRound:'',fundingTarget:'',challenges:'',globalExpansion:'',kpi:'',supportCount:'',supportArea:'',investmentIndustry:'',targetRound:''}

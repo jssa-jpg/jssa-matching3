@@ -289,7 +289,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   if(profile.fundingRound)document.getElementById('fundingRound').value=profile.fundingRound;
   if(profile.fundingTarget)document.getElementById('fundingTarget').value=profile.fundingTarget;
   if(profile.globalExpansion)document.getElementById('globalExpansion').value=profile.globalExpansion;
-  if(profile.kpi)document.getElementById('kpi').value=profile.kpi;
+  if(profile.kpi){const kpiEl=document.getElementById('kpi');if(kpiEl)kpiEl.value=profile.kpi;}
   if(profile.supportCount)document.getElementById('supportCount').value=profile.supportCount;
 
   // 複数選択項目の復元
