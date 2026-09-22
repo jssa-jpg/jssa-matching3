@@ -166,7 +166,14 @@ async function doRegister(){
       sessionStorage.setItem('jssa_company',data.user.company);
       localStorage.setItem('jssa_invite',inviteCode);
       localStorage.setItem('jssa_email',email);
-      window.location.href='/profile';
+      const p=data.user.profile||{};
+      const profileFilled=Object.values(p).some(v=>v&&v.length>0);
+      if(profileFilled){
+        sessionStorage.setItem('jssa_profile_done','1');
+        window.location.href='/';
+      }else{
+        window.location.href='/profile';
+      }
     }else if(data.needLogin){
       err.textContent='このメールアドレスは登録済みです。ログインしてください。';
       err.classList.add('show');

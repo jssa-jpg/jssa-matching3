@@ -271,6 +271,17 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:'推薦メールを送信しました'})};
     }
 
+    if(action==='deactivateUser'){
+      // 退会処理：ログインをブロックするが、プロフィール・履歴データは削除せずそのまま保持する
+      const{userId}=body;
+      if(!userId)return{statusCode:400,headers,body:JSON.stringify({error:'userIdが必要です'})};
+      const userRows=await getSheet(token,'ユーザー登録');
+      const idx=userRows.findIndex((r,i)=>i>0&&r[0]===userId);
+      if(idx<0)return{statusCode:404,headers,body:JSON.stringify({error:'ユーザーが見つかりません'})};
+      await updateCell(token,'ユーザー登録',idx+1,'AB','退会');
+      return{statusCode:200,headers,body:JSON.stringify({success:true,message:'退会処理をしました'})};
+    }
+
     if(action==='decline'){
       const{rowIndex,memberEmail,memberName,targetCompany}=body;
       if(memberEmail&&RESEND_API_KEY){

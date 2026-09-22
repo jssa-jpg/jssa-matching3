@@ -253,6 +253,17 @@ async function loadNextCompanies(batchId){
   }
 }
 
+async function deactivateUser(batch){
+  if(!batch.userId){alert('ユーザーIDが取得できませんでした');return;}
+  if(!confirm(`${batch.userName||batch.userCompany}様（${batch.userEmail}）を退会処理します。\nログインはできなくなりますが、マイページの登録情報や紹介履歴は削除されず保持されます。\nよろしいですか？`))return;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'deactivateUser',userId:batch.userId})});
+    const data=await res.json();
+    if(data.success){alert('退会処理をしました');}
+    else{alert(data.error||'処理に失敗しました');}
+  }catch(e){alert('エラー: '+e.message);}
+}
+
 async function sendCompanyNames(batch){
   const selSet=selectedCompanies[batch.batchId];
   if(!selSet||selSet.size===0){alert('送信する企業を1社以上選択してください（チェックボックスで採択してください）');return;}
@@ -395,6 +406,9 @@ function renderCards(){
           <button class="btn-approve" onclick='sendCompanyNames(${JSON.stringify(b).replace(/'/g,"&#39;")})'>📧 採択した企業だけメール送信</button>
           <button class="btn-decline" onclick='addRequestFromReply(${JSON.stringify(b).replace(/'/g,"&#39;")})'>💬 ユーザー返信を登録</button>
         </div>`:''}
+        <div class="actions" style="margin-top:6px">
+          <button class="sel-btn" style="color:#991b1b;border-color:#fca5a5" onclick='deactivateUser(${JSON.stringify(b).replace(/'/g,"&#39;")})'>🚫 このユーザーを退会処理する</button>
+        </div>
       </div>`;
     }).join('');
     return;

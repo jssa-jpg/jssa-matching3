@@ -55,6 +55,10 @@ exports.handler=async(event)=>{
       if((r[1]||'')!==inviteCode){
         return{statusCode:401,headers,body:JSON.stringify({error:'請求書番号またはメールアドレスが正しくありません。'})};
       }
+      // 退会済みアカウントはログインをブロックする
+      if((r[27]||'')==='退会'){
+        return{statusCode:403,headers,body:JSON.stringify({error:'このアカウントは退会済みです。再入会をご希望の場合は「新規登録」タブから請求書番号を入力してお手続きください。'})};
+      }
       // 会員ランクは請求書番号から取得（使用済でも参照可能。見つからない場合はレギュラー扱い）
       const inviteRows=await getSheet(token,'招待コード');
       const inviteRow=inviteRows.find((row,i)=>i>0&&row[0]===inviteCode);
@@ -81,9 +85,50 @@ exports.handler=async(event)=>{
       if(!company||!position||!name||!email||!mobile){
         return{statusCode:400,headers,body:JSON.stringify({error:'必須項目を全て入力してください'})};
       }
+      const id=process.env.GOOGLE_SHEET_ID;
+
       if(existingIndex>=0){
-        return{statusCode:409,headers,body:JSON.stringify({error:'このメールアドレスは既に登録されています。ログインしてください。',needLogin:true})};
+        const r=userRows[existingIndex];
+        const isWithdrawn=(r[27]||'')==='退会';
+        if(!isWithdrawn){
+          return{statusCode:409,headers,body:JSON.stringify({error:'このメールアドレスは既に登録されています。ログインしてください。',needLogin:true})};
+        }
+        // 退会済みアカウントの再入会：招待コードの有効性を確認したうえで、
+        // 既存のプロフィール・履歴データは保持したまま再有効化する
+        const inviteRows=await getSheet(token,'招待コード');
+        const inviteIndex=inviteRows.findIndex((row,i)=>i>0&&row[0]===inviteCode&&row[4]==='有効');
+        if(inviteIndex<0){
+          return{statusCode:401,headers,body:JSON.stringify({error:'招待コードが無効です。事務局にお問い合わせください。'})};
+        }
+        const memberRank=inviteRows[inviteIndex][6]||'レギュラー';
+        const now=new Date().toISOString();
+        const userId=r[0];
+        await updateRow(token,'ユーザー登録',existingIndex+1,[userId,inviteCode,company,position,name,email,mobile,website||'',facebook||'',r[9]||now,now,'1']);
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(`ユーザー登録!AB${existingIndex+1}`)}?valueInputOption=RAW`,{method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[['']]})});
+
+        // 招待コードを使用済みに更新
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(`招待コード!C${inviteIndex+1}`)}?valueInputOption=RAW`,{method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[email]]})});
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(`招待コード!D${inviteIndex+1}`)}?valueInputOption=RAW`,{method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[now]]})});
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(`招待コード!E${inviteIndex+1}`)}?valueInputOption=RAW`,{method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[['使用済']]})});
+
+        return{statusCode:200,headers,body:JSON.stringify({
+          success:true,
+          reactivated:true,
+          user:{
+            id:userId,inviteCode,company,position,name,email,mobile,
+            website:website||'',facebook:facebook||'',
+            memberRank,
+            profile:{
+              fundingRound:r[12]||'',fundingTarget:r[13]||'',challenges:r[14]||'',
+              globalExpansion:r[15]||'',kpi:r[16]||'',supportCount:r[17]||'',
+              supportArea:r[18]||'',investmentIndustry:r[19]||'',targetRound:r[20]||'',
+              ma:r[21]||'',secondaryMarket:r[22]||'',hiringNeeds:r[23]||'',
+              stockOption:r[24]||'',ventureInvestment:r[25]||'',lpInvestment:r[26]||''
+            }
+          }
+        })};
       }
+
       // 新規登録の場合のみ、招待コードが「有効（未使用）」であることを確認する
       const inviteRows=await getSheet(token,'招待コード');
       const inviteIndex=inviteRows.findIndex((r,i)=>i>0&&r[0]===inviteCode&&r[4]==='有効');
@@ -94,11 +139,10 @@ exports.handler=async(event)=>{
       const userId='U'+Date.now();
       const now=new Date().toISOString();
       // A:ユーザーID B:請求書番号 C:会社名 D:役職 E:氏名 F:メール G:携帯電話 H:会社HP I:FacebookURL J:登録日時 K:最終ログイン L:共通パスワード確認済
-      // M〜AA列（15列）はプロフィール情報用に予約
-      await appendRow(token,'ユーザー登録',[userId,inviteCode,company,position,name,email,mobile,website||'',facebook||'',now,now,'1','','','','','','','','','','','','','','','']);
+      // M〜AA列（15列）はプロフィール情報用に予約、AB列は会員ステータス（退会時に"退会"と記録）
+      await appendRow(token,'ユーザー登録',[userId,inviteCode,company,position,name,email,mobile,website||'',facebook||'',now,now,'1','','','','','','','','','','','','','','','','']);
 
       // 招待コードを使用済みに更新
-      const id=process.env.GOOGLE_SHEET_ID;
       const updateToken=token;
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(`招待コード!C${inviteIndex+1}`)}?valueInputOption=RAW`,{method:'PUT',headers:{'Authorization':`Bearer ${updateToken}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[email]]})});
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(`招待コード!D${inviteIndex+1}`)}?valueInputOption=RAW`,{method:'PUT',headers:{'Authorization':`Bearer ${updateToken}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[now]]})});
