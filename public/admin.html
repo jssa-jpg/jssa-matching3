@@ -253,6 +253,22 @@ async function loadNextCompanies(batchId){
   }
 }
 
+async function changeMemberRank(batch){
+  if(!batch.userId){alert('ユーザーIDが取得できませんでした');return;}
+  const ranks=['レギュラーライト','レギュラー','プライム','ライト','特待生','投資先'];
+  const current=batch.memberRank||'';
+  const input=prompt(`新しい会員ランクを、下の選択肢の中から一言一句そのまま入力してください（現在: ${current}）\n\n選択肢: ${ranks.join(' / ')}`,current);
+  if(!input)return;
+  if(!ranks.includes(input)){alert('入力されたランク名が選択肢と一致しません。もう一度お試しください。');return;}
+  if(!confirm(`${batch.userName||batch.userCompany}様の会員ランクを「${input}」に変更します。\n今月の残高も新しいランクの上限にリセットされます。よろしいですか？`))return;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'updateMemberRank',userId:batch.userId,newRank:input})});
+    const data=await res.json();
+    if(data.success){alert(data.message||'変更しました');loadMatchResults();}
+    else{alert(data.error||'処理に失敗しました');}
+  }catch(e){alert('エラー: '+e.message);}
+}
+
 async function deactivateUser(batch){
   if(!batch.userId){alert('ユーザーIDが取得できませんでした');return;}
   if(!confirm(`${batch.userName||batch.userCompany}様（${batch.userEmail}）を退会処理します。\nログインはできなくなりますが、マイページの登録情報や紹介履歴は削除されず保持されます。\nよろしいですか？`))return;
@@ -407,6 +423,7 @@ function renderCards(){
           <button class="btn-decline" onclick='addRequestFromReply(${JSON.stringify(b).replace(/'/g,"&#39;")})'>💬 ユーザー返信を登録</button>
         </div>`:''}
         <div class="actions" style="margin-top:6px">
+          <button class="sel-btn" onclick='changeMemberRank(${JSON.stringify(b).replace(/'/g,"&#39;")})'>🎖 会員ランクを変更（現在: ${b.memberRank||'default'}）</button>
           <button class="sel-btn" style="color:#991b1b;border-color:#fca5a5" onclick='deactivateUser(${JSON.stringify(b).replace(/'/g,"&#39;")})'>🚫 このユーザーを退会処理する</button>
         </div>
       </div>`;

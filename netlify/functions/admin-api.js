@@ -1,4 +1,4 @@
-const{getParticipants,decrementUserBalance,MONTHLY_LIMITS}=require('./sheets-helper');
+const{getParticipants,decrementUserBalance,setUserBalance,MONTHLY_LIMITS}=require('./sheets-helper');
 const RESEND_API_KEY=process.env.RESEND_API_KEY;
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const OFFICE_EMAIL='tok@yumeplanning.jp';
@@ -269,6 +269,26 @@ exports.handler=async(event)=>{
       if(!res.ok)return{statusCode:500,headers,body:JSON.stringify({error:'メール送信失敗: '+JSON.stringify(resData)})};
       if(rowIndex)await updateCell(token,'会いたいリクエスト',rowIndex,'E','推薦メール送信済');
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:'推薦メールを送信しました'})};
+    }
+
+    if(action==='updateMemberRank'){
+      // 管理画面から会員ランクを直接変更する。ランクは招待コードシート側で管理されているため、
+      // そのユーザーが使った請求書番号の行を探して会員ランク（G列）を書き換える。
+      // あわせて今月分の残高も新しい上限にリセットする。
+      const{userId,newRank}=body;
+      if(!userId||!newRank)return{statusCode:400,headers,body:JSON.stringify({error:'userIdとnewRankが必要です'})};
+      const userRows=await getSheet(token,'ユーザー登録');
+      const uIdx=userRows.findIndex((r,i)=>i>0&&r[0]===userId);
+      if(uIdx<0)return{statusCode:404,headers,body:JSON.stringify({error:'ユーザーが見つかりません'})};
+      const inviteCode=userRows[uIdx][1]||'';
+      if(!inviteCode)return{statusCode:400,headers,body:JSON.stringify({error:'このユーザーの請求書番号が見つかりません'})};
+      const inviteRows=await getSheet(token,'招待コード');
+      const iIdx=inviteRows.findIndex((r,i)=>i>0&&r[0]===inviteCode);
+      if(iIdx<0)return{statusCode:404,headers,body:JSON.stringify({error:'対応する招待コードが見つかりません'})};
+      await updateCell(token,'招待コード',iIdx+1,'G',newRank);
+      const limit=MONTHLY_LIMITS[newRank]||MONTHLY_LIMITS['default'];
+      try{await setUserBalance(userId,limit);}catch(e){console.error('残高更新エラー:',e.message);}
+      return{statusCode:200,headers,body:JSON.stringify({success:true,message:`会員ランクを「${newRank}」に変更し、今月の残高を${limit}にリセットしました`})};
     }
 
     if(action==='deactivateUser'){

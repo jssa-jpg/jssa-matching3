@@ -241,6 +241,26 @@ async function decrementUserBalance(userId, limit, count) {
   }
 }
 
+// 管理画面から会員ランクを変更した際などに、今月分の残高を直接指定の値にセットする
+async function setUserBalance(userId, balance) {
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const yearMonth = new Date().toISOString().slice(0, 7);
+    const rows = await _readBalanceRows(token, sheetId);
+    const rowIndex = rows.findIndex(r => r[0] === String(userId));
+    if (rowIndex >= 0) {
+      const range = `月次リクエスト数!B${rowIndex + 1}:C${rowIndex + 1}`;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[yearMonth, String(balance)]] }) });
+    } else {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
+    }
+  } catch (e) {
+    console.error('setUserBalance error:', e.message);
+  }
+}
+
 // アプリ2用：マッチング結果を「マッチング結果」シートに保存（管理者レビュー用、ユーザーには非公開）
 async function saveMatchResultsForReview(userId, userInfo, matches, aiParams) {
   try {
@@ -296,4 +316,4 @@ async function getAccessToken(serviceAccount) {
   return data.access_token;
 }
 
-module.exports = { getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
+module.exports = { getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
