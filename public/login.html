@@ -116,11 +116,15 @@ async function doLogin(){
       sessionStorage.setItem('jssa_company',data.user.company);
       localStorage.setItem('jssa_invite',inviteCode);
       localStorage.setItem('jssa_email',email);
-      const profileDone=sessionStorage.getItem('jssa_profile_done');
-      if(!profileDone){
-        window.location.href='/profile';
-      }else{
+      // プロフィール登録済みかどうかは、セッションの一時フラグではなく
+      // サーバーに保存されている実際のプロフィールデータの有無で判定する
+      const p=data.user.profile||{};
+      const profileFilled=Object.values(p).some(v=>v&&v.length>0);
+      if(profileFilled){
+        sessionStorage.setItem('jssa_profile_done','1');
         window.location.href='/';
+      }else{
+        window.location.href='/profile';
       }
     }else if(data.needRegister){
       err.textContent='登録されていません。新規登録タブから登録してください。';
