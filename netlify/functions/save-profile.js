@@ -41,7 +41,7 @@ exports.handler=async(event)=>{
     }
 
     const row=rowIndex+1;
-    // M列以降にプロフィール情報を保存（kpiを含む9項目）
+    // M列以降にプロフィール情報を保存（kpiを含む15項目）
     const profileValues=[[
       profile.fundingRound||'',
       profile.fundingTarget||'',
@@ -51,10 +51,16 @@ exports.handler=async(event)=>{
       profile.supportCount||'',
       profile.supportArea||'',
       profile.investmentIndustry||'',
-      profile.targetRound||''
+      profile.targetRound||'',
+      profile.ma||'',
+      profile.secondaryMarket||'',
+      profile.hiringNeeds||'',
+      profile.stockOption||'',
+      profile.ventureInvestment||'',
+      profile.lpInvestment||''
     ]];
 
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`ユーザー登録!M${row}:U${row}`)}?valueInputOption=RAW`,{
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`ユーザー登録!M${row}:AA${row}`)}?valueInputOption=RAW`,{
       method:'PUT',
       headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
       body:JSON.stringify({values:profileValues})

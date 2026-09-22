@@ -69,7 +69,9 @@ exports.handler=async(event)=>{
           profile:{
             fundingRound:r[12]||'',fundingTarget:r[13]||'',challenges:r[14]||'',
             globalExpansion:r[15]||'',kpi:r[16]||'',supportCount:r[17]||'',
-            supportArea:r[18]||'',investmentIndustry:r[19]||'',targetRound:r[20]||''
+            supportArea:r[18]||'',investmentIndustry:r[19]||'',targetRound:r[20]||'',
+            ma:r[21]||'',secondaryMarket:r[22]||'',hiringNeeds:r[23]||'',
+            stockOption:r[24]||'',ventureInvestment:r[25]||'',lpInvestment:r[26]||''
           }
         }
       })};
@@ -92,8 +94,8 @@ exports.handler=async(event)=>{
       const userId='U'+Date.now();
       const now=new Date().toISOString();
       // A:ユーザーID B:請求書番号 C:会社名 D:役職 E:氏名 F:メール G:携帯電話 H:会社HP I:FacebookURL J:登録日時 K:最終ログイン L:共通パスワード確認済
-      // M〜U列（9列）はプロフィール情報用に予約
-      await appendRow(token,'ユーザー登録',[userId,inviteCode,company,position,name,email,mobile,website||'',facebook||'',now,now,'1','','','','','','','','','']);
+      // M〜AA列（15列）はプロフィール情報用に予約
+      await appendRow(token,'ユーザー登録',[userId,inviteCode,company,position,name,email,mobile,website||'',facebook||'',now,now,'1','','','','','','','','','','','','','','','']);
 
       // 招待コードを使用済みに更新
       const id=process.env.GOOGLE_SHEET_ID;
@@ -108,7 +110,7 @@ exports.handler=async(event)=>{
           id:userId,inviteCode,company,position,name,email,mobile,
           website:website||'',facebook:facebook||'',
           memberRank,
-          profile:{fundingRound:'',fundingTarget:'',challenges:'',globalExpansion:'',kpi:'',supportCount:'',supportArea:'',investmentIndustry:'',targetRound:''}
+          profile:{fundingRound:'',fundingTarget:'',challenges:'',globalExpansion:'',kpi:'',supportCount:'',supportArea:'',investmentIndustry:'',targetRound:'',ma:'',secondaryMarket:'',hiringNeeds:'',stockOption:'',ventureInvestment:'',lpInvestment:''}
         }
       })};
     }

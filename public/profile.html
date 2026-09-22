@@ -110,6 +110,34 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#0B0F1A;color:#fff;mi
           <option>済（展開済み）</option><option>なし</option>
         </select>
       </div>
+      <div class="frow">
+        <label class="flabel">M&Aについて</label>
+        <select class="fsel" id="ma-startup">
+          <option value="">選択してください</option>
+          <option>関心がある</option><option>関心はない</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">ストックオプションについて</label>
+        <select class="fsel" id="stockOption">
+          <option value="">選択してください</option>
+          <option>関心がある</option><option>関心はない</option><option>導入済み</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">セカンダリーマーケットについて</label>
+        <select class="fsel" id="secondaryMarket-startup">
+          <option value="">選択してください</option>
+          <option>関心がある</option><option>関心はない</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">人材採用ニーズについて</label>
+        <select class="fsel" id="hiringNeeds-startup">
+          <option value="">選択してください</option>
+          <option>非常にある</option><option>ある</option><option>ない</option>
+        </select>
+      </div>
 
     </div>
   </div>
@@ -182,6 +210,41 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#0B0F1A;color:#fff;mi
           </div>
         </div>
       </div>
+      <div class="frow">
+        <label class="flabel">M&Aについて</label>
+        <select class="fsel" id="ma-supporter">
+          <option value="">選択してください</option>
+          <option>関心がある</option><option>関心はない</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">セカンダリーマーケットについて</label>
+        <select class="fsel" id="secondaryMarket-supporter">
+          <option value="">選択してください</option>
+          <option>関心がある</option><option>関心はない</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">ベンチャー投資について</label>
+        <select class="fsel" id="ventureInvestment">
+          <option value="">選択してください</option>
+          <option>関心がある</option><option>関心はない</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">LP投資について</label>
+        <select class="fsel" id="lpInvestment">
+          <option value="">選択してください</option>
+          <option>関心がある</option><option>関心はない</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">人材採用ニーズについて</label>
+        <select class="fsel" id="hiringNeeds-supporter">
+          <option value="">選択してください</option>
+          <option>非常にある</option><option>ある</option><option>ない</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -237,11 +300,18 @@ async function save(){
     fundingTarget:userType==='startup'?(document.getElementById('fundingTarget').value||''):'',
     challenges:userType==='startup'?getMs('ms-challenges'):'',
     globalExpansion:userType==='startup'?(document.getElementById('globalExpansion').value||''):'',
-    
+
     supportCount:userType==='supporter'?(document.getElementById('supportCount').value||''):'',
     supportArea:userType==='supporter'?getMs('ms-supportArea'):'',
     investmentIndustry:userType==='supporter'?getMs('ms-investmentIndustry'):'',
-    targetRound:userType==='supporter'?getMs('ms-targetRound'):''
+    targetRound:userType==='supporter'?getMs('ms-targetRound'):'',
+
+    ma:userType==='startup'?(document.getElementById('ma-startup').value||''):(document.getElementById('ma-supporter').value||''),
+    secondaryMarket:userType==='startup'?(document.getElementById('secondaryMarket-startup').value||''):(document.getElementById('secondaryMarket-supporter').value||''),
+    hiringNeeds:userType==='startup'?(document.getElementById('hiringNeeds-startup').value||''):(document.getElementById('hiringNeeds-supporter').value||''),
+    stockOption:userType==='startup'?(document.getElementById('stockOption').value||''):'',
+    ventureInvestment:userType==='supporter'?(document.getElementById('ventureInvestment').value||''):'',
+    lpInvestment:userType==='supporter'?(document.getElementById('lpInvestment').value||''):''
   };
 
   try{
@@ -291,6 +361,12 @@ window.addEventListener('DOMContentLoaded',()=>{
   if(profile.globalExpansion)document.getElementById('globalExpansion').value=profile.globalExpansion;
   if(profile.kpi){const kpiEl=document.getElementById('kpi');if(kpiEl)kpiEl.value=profile.kpi;}
   if(profile.supportCount)document.getElementById('supportCount').value=profile.supportCount;
+  if(profile.ma){const a=document.getElementById('ma-startup');if(a)a.value=profile.ma;const b=document.getElementById('ma-supporter');if(b)b.value=profile.ma;}
+  if(profile.secondaryMarket){const a=document.getElementById('secondaryMarket-startup');if(a)a.value=profile.secondaryMarket;const b=document.getElementById('secondaryMarket-supporter');if(b)b.value=profile.secondaryMarket;}
+  if(profile.hiringNeeds){const a=document.getElementById('hiringNeeds-startup');if(a)a.value=profile.hiringNeeds;const b=document.getElementById('hiringNeeds-supporter');if(b)b.value=profile.hiringNeeds;}
+  if(profile.stockOption)document.getElementById('stockOption').value=profile.stockOption;
+  if(profile.ventureInvestment)document.getElementById('ventureInvestment').value=profile.ventureInvestment;
+  if(profile.lpInvestment)document.getElementById('lpInvestment').value=profile.lpInvestment;
 
   // 複数選択項目の復元
   const msMap={
