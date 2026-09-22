@@ -256,12 +256,15 @@ async function loadNextCompanies(batchId){
 async function sendCompanyNames(batch){
   const selSet=selectedCompanies[batch.batchId];
   if(!selSet||selSet.size===0){alert('送信する企業を1社以上選択してください（チェックボックスで採択してください）');return;}
-  const chosen=batch.companies.filter(c=>selSet.has(c.rowIndex));
-  if(!confirm(`${batch.userName||batch.userCompany}様に、採択した${chosen.length}社の企業名をメールで送信します。よろしいですか？`))return;
+  const loaded=loadedDetails[batch.batchId]||[];
+  const chosenDetailed=loaded.filter(c=>selSet.has(c.rowIndex));
+  if(chosenDetailed.length===0){alert('選択した企業の詳細情報が読み込まれていません。もう一度お試しください。');return;}
+  if(!confirm(`${batch.userName||batch.userCompany}様に、採択した${chosenDetailed.length}社の企業名と推薦理由をメールで送信します。よろしいですか？`))return;
   try{
-    const rowIndexes=chosen.map(c=>c.rowIndex);
-    const companies=chosen.map(c=>c.targetCompany);
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendCompanyNames',batchId:batch.batchId,rowIndexes,userEmail:batch.userEmail,userName:batch.userName,userId:batch.userId,memberRank:batch.memberRank,companies})});
+    const rowIndexes=chosenDetailed.map(c=>c.rowIndex);
+    const companies=chosenDetailed.map(c=>c.company);
+    const companyDetails=chosenDetailed.map(c=>({name:c.company,reason:c.recommendation||''}));
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendCompanyNames',batchId:batch.batchId,rowIndexes,userEmail:batch.userEmail,userName:batch.userName,userId:batch.userId,memberRank:batch.memberRank,companies,companyDetails})});
     const data=await res.json();
     if(data.success){alert('企業名一覧を送信しました');delete selectedCompanies[batch.batchId];loadMatchResults();}
     else{alert(data.error||'送信に失敗しました');}

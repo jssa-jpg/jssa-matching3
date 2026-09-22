@@ -182,11 +182,12 @@ exports.handler=async(event)=>{
     }
 
     if(action==='sendCompanyNames'){
-      // ③ 岡代表が確認した企業名のみをユーザーにメール送信する
-      const{batchId,rowIndexes,userEmail,userName,companies,userId,memberRank}=body;
+      // ③ 岡代表が確認した企業名（推薦理由付き）をユーザーにメール送信する
+      const{batchId,rowIndexes,userEmail,userName,companies,companyDetails,userId,memberRank}=body;
       if(!userEmail)return{statusCode:400,headers,body:JSON.stringify({error:'送信先メールアドレスがありません'})};
-      const list=(companies||[]).map((c,i)=>`${i+1}. ${c}`).join('\n');
-      const mailText=`${userName||''} 様\n\n日本スタートアップ支援協会（JSSA）の岡隆宏です。\n平素よりお世話になっております。\n\nご登録いただいたご希望条件をもとに、AIマッチングシステムにて相性の良い企業様を選定いたしましたので、以下の通りご案内いたします。\n\n【マッチング企業一覧】\n${list}\n\nこの中で面談・情報交換をご希望される企業様がございましたら、本メールに返信する形で会社名をお知らせください。\n担当役職者の方をこちらで選定の上、あらためてご連絡いたします。\n\n${SIGNATURE}`;
+      const details=(companyDetails&&companyDetails.length>0)?companyDetails:(companies||[]).map(c=>({name:c,reason:''}));
+      const list=details.map((c,i)=>`${i+1}. ${c.name}\n推薦理由：${c.reason||'（推薦理由情報なし）'}`).join('\n\n');
+      const mailText=`${userName||''} 様\n\n日本スタートアップ支援協会（JSSA）の岡隆宏です。\n平素よりお世話になっております。\n\n登録いただいた希望条件をもとに、私が相性の良い企業様を選定いたしましたので、以下の通り案内します。\n\n【マッチング企業一覧】\n\n${list}\n\nこの中で面談・情報交換を希望される企業様を、本メールに返信する形で会社名をお知らせください。\n件名は絶対に変更しないでください。担当者の方をこちらで選定の上、あらためてご連絡いたします。\nすでに商談済みの企業や希望する企業がない場合は該当なしと返信ください。再度検討選定します。\n\n${SIGNATURE}`;
       const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'tok@yumeplanning.jp',to:[userEmail],reply_to:OFFICE_EMAIL,subject:'【JSSA】マッチング企業のご案内',html:`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:10px;"><div style="background:#0B0F1A;padding:14px 20px;border-radius:8px;margin-bottom:20px;"><span style="background:#639922;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;">JSSA</span><span style="color:#fff;font-size:13px;margin-left:8px;">日本スタートアップ支援協会</span></div><div style="font-size:14px;color:#374151;line-height:1.8;">${mailText.replace(/\n/g,'<br>')}</div></div>`})});
       const resData=await res.json();
       if(!res.ok)return{statusCode:500,headers,body:JSON.stringify({error:'メール送信失敗: '+JSON.stringify(resData)})};
