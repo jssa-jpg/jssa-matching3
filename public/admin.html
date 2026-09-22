@@ -304,7 +304,7 @@ async function addRequestFromReply(batch){
   try{
     const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'addRequest',userId:batch.userId,userCompany:batch.userCompany,userName:batch.userName,userEmail:batch.userEmail,targetCompany:company})});
     const data=await res.json();
-    if(data.success){alert('「会いたいリクエスト」に追加しました。「すべて」タブから役職者選定・プロフィール送信の作業を進めてください。');setTab('all');}
+    if(data.success){alert('「会いたいリクエスト」に追加しました。「すべて」タブから役職者選定・プロフィール送信の作業を進めてください。');setTab('all');await loadRequests();}
     else{alert(data.error||'追加に失敗しました');}
   }catch(e){alert('エラー: '+e.message);}
 }
