@@ -302,32 +302,42 @@ function addRequestFromReply(batch){
   isDetailOpen=true;
   const area=document.getElementById('detail-area');
   const uniqueCompanies=[...new Set((batch.companies||[]).map(c=>c.targetCompany).filter(Boolean))];
+  const checkboxes=uniqueCompanies.map((c,i)=>`<label class="ms-item"><input type="checkbox" value="${c.replace(/"/g,'&quot;')}" id="wish-ck-${i}">${c}</label>`).join('');
   area.innerHTML=`<div class="detail-wrap" id="detail-box" style="display:block">
     <div class="detail-head"><div class="detail-title">💬 ユーザー希望企業を登録：${batch.userName||batch.userCompany}様</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
-    <label class="edit-label">① マッチ企業の候補から選択（自動で下の欄にコピーされます）</label>
-    <select id="wish-select" onchange="document.getElementById('wish-input').value=this.value" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px">
-      <option value="">-- 候補を選択 --</option>
-      ${uniqueCompanies.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c}</option>`).join('')}
-    </select>
-    <label class="edit-label">② 登録する企業名（候補にない場合は直接入力・修正も可能）</label>
-    <input type="text" id="wish-input" class="finput" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px" placeholder="企業名を選択または入力してください">
+    <label class="edit-label">① マッチ企業の候補から選択（複数選択可）</label>
+    <div class="company-list" style="max-height:220px;overflow-y:auto">${checkboxes||'<div style="padding:8px;color:#6b7280;font-size:12px">候補がありません</div>'}</div>
+    <label class="edit-label" style="margin-top:12px">② 候補にない企業を追加する場合（1行に1社ずつ入力）</label>
+    <textarea id="wish-manual" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px" placeholder="候補にない企業名があれば、1行に1社ずつ入力してください"></textarea>
     <div class="detail-actions">
       <button class="btn-cancel" onclick="closeDetail()">キャンセル</button>
-      <button class="btn-send" onclick='submitWishCompany(${JSON.stringify(batch).replace(/'/g,"&#39;")})'>登録する</button>
+      <button class="btn-send" id="wish-submit-btn" onclick='submitWishCompany(${JSON.stringify(batch).replace(/'/g,"&#39;")})'>登録する</button>
     </div>
   </div>`;
   area.scrollIntoView({behavior:'smooth'});
 }
 
 async function submitWishCompany(batch){
-  const company=document.getElementById('wish-input').value.trim();
-  if(!company){alert('企業名を選択または入力してください');return;}
+  const checked=Array.from(document.querySelectorAll('#detail-area input[type=checkbox]:checked')).map(c=>c.value);
+  const manual=document.getElementById('wish-manual').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const companies=[...new Set([...checked,...manual])];
+  if(companies.length===0){alert('登録する企業を1社以上選択または入力してください');return;}
+  const btn=document.getElementById('wish-submit-btn');
+  btn.disabled=true;btn.textContent='登録中...';
   try{
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'addRequest',userId:batch.userId,userCompany:batch.userCompany,userName:batch.userName,userEmail:batch.userEmail,targetCompany:company})});
-    const data=await res.json();
-    if(data.success){closeDetail();alert('「会いたいリクエスト」に追加しました。「ユーザー返信」タブから役職者選定・プロフィール送信の作業を進めてください。');setTab('all');await loadRequests();}
-    else{alert(data.error||'追加に失敗しました');}
+    let successCount=0;
+    const errors=[];
+    for(const company of companies){
+      const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'addRequest',userId:batch.userId,userCompany:batch.userCompany,userName:batch.userName,userEmail:batch.userEmail,targetCompany:company})});
+      const data=await res.json();
+      if(data.success)successCount++;else errors.push(`${company}: ${data.error||'失敗'}`);
+    }
+    closeDetail();
+    if(errors.length>0)alert(`${successCount}社を登録しました。\n失敗:\n${errors.join('\n')}`);
+    else alert(`${successCount}社を「会いたいリクエスト」に追加しました。「ユーザー返信」タブから役職者選定・プロフィール送信の作業を進めてください。`);
+    setTab('all');await loadRequests();
   }catch(e){alert('エラー: '+e.message);}
+  finally{if(btn){btn.disabled=false;btn.textContent='登録する';}}
 }
 
 async function loadTrash(){
