@@ -237,7 +237,7 @@ async function loadNextCompanies(batchId){
   const btn=document.getElementById(`loadmore-${batchId}`);
   if(btn){btn.disabled=true;btn.textContent='読み込み中…（AIが推薦理由を生成しています）';}
   try{
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getCompanyDetails',items:nextItems.map(it=>({company:it.targetCompany,score:it.score,cardRow:it.cardRow})),aiParams:batch.aiParams||{}})});
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getCompanyDetails',items:nextItems.map(it=>({company:it.targetCompany,score:it.score,cardRow:it.cardRow})),aiParams:batch.aiParams||{},applicant:{company:batch.userCompany,name:batch.userName,profile:batch.userProfile||{}}})});
     const data=await res.json();
     if(data.success){
       const merged=data.companies.map((c,i)=>({...c,rowIndex:nextItems[i].rowIndex}));
@@ -397,6 +397,7 @@ function renderCards(){
             <div class="cc-row"><span><b>サイト:</b> ${c.siteUrl?`<a href="${c.siteUrl}" target="_blank" rel="noopener">${c.siteUrl}</a>`:'-'}</span></div>
             <div style="margin-top:6px"><b>会社概要:</b> ${c.features||'情報なし'}</div>
             ${c.matchReason?`<div style="margin-top:4px"><b>マッチ理由:</b> ${c.matchReason}</div>`:''}
+            ${c.meetingBenefit?`<div style="margin-top:4px"><b>面談メリット:</b> ${c.meetingBenefit}</div>`:''}
             ${c.recommendation?`<div class="reason-box">🎯 <b>推薦理由:</b> ${c.recommendation}</div>`:''}
             ${!c.found?`<div style="color:#991b1b;margin-top:4px">⚠️ 名刺データが見つかりませんでした（削除・変更された可能性）</div>`:''}
           </div>
