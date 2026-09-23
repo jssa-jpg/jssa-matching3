@@ -298,13 +298,34 @@ async function sendCompanyNames(batch){
   }catch(e){alert('エラー: '+e.message);}
 }
 
-async function addRequestFromReply(batch){
-  const company=prompt(`${batch.userName||batch.userCompany}様が会いたいとご返信された企業名を入力してください\n（候補: ${batch.companies.map(c=>c.targetCompany).join('、')}）`);
-  if(!company)return;
+function addRequestFromReply(batch){
+  isDetailOpen=true;
+  const area=document.getElementById('detail-area');
+  const uniqueCompanies=[...new Set((batch.companies||[]).map(c=>c.targetCompany).filter(Boolean))];
+  area.innerHTML=`<div class="detail-wrap" id="detail-box" style="display:block">
+    <div class="detail-head"><div class="detail-title">💬 ユーザー希望企業を登録：${batch.userName||batch.userCompany}様</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
+    <label class="edit-label">① マッチ企業の候補から選択（自動で下の欄にコピーされます）</label>
+    <select id="wish-select" onchange="document.getElementById('wish-input').value=this.value" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px">
+      <option value="">-- 候補を選択 --</option>
+      ${uniqueCompanies.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c}</option>`).join('')}
+    </select>
+    <label class="edit-label">② 登録する企業名（候補にない場合は直接入力・修正も可能）</label>
+    <input type="text" id="wish-input" class="finput" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px" placeholder="企業名を選択または入力してください">
+    <div class="detail-actions">
+      <button class="btn-cancel" onclick="closeDetail()">キャンセル</button>
+      <button class="btn-send" onclick='submitWishCompany(${JSON.stringify(batch).replace(/'/g,"&#39;")})'>登録する</button>
+    </div>
+  </div>`;
+  area.scrollIntoView({behavior:'smooth'});
+}
+
+async function submitWishCompany(batch){
+  const company=document.getElementById('wish-input').value.trim();
+  if(!company){alert('企業名を選択または入力してください');return;}
   try{
     const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'addRequest',userId:batch.userId,userCompany:batch.userCompany,userName:batch.userName,userEmail:batch.userEmail,targetCompany:company})});
     const data=await res.json();
-    if(data.success){alert('「会いたいリクエスト」に追加しました。「ユーザー返信」タブから役職者選定・プロフィール送信の作業を進めてください。');setTab('all');await loadRequests();}
+    if(data.success){closeDetail();alert('「会いたいリクエスト」に追加しました。「ユーザー返信」タブから役職者選定・プロフィール送信の作業を進めてください。');setTab('all');await loadRequests();}
     else{alert(data.error||'追加に失敗しました');}
   }catch(e){alert('エラー: '+e.message);}
 }
