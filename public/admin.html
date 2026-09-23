@@ -232,7 +232,7 @@ async function loadNextCompanies(batchId){
   const batch=matchBatches.find(b=>b.batchId===batchId);
   if(!batch)return;
   const loaded=loadedDetails[batchId]||[];
-  const nextItems=batch.companies.slice(loaded.length,loaded.length+10);
+  const nextItems=batch.companies.slice(loaded.length,loaded.length+5);
   if(nextItems.length===0)return;
   const btn=document.getElementById(`loadmore-${batchId}`);
   if(btn){btn.disabled=true;btn.textContent='読み込み中…（AIが推薦理由を生成しています）';}
@@ -245,11 +245,11 @@ async function loadNextCompanies(batchId){
       renderCards();
     }else{
       alert(data.error||'取得に失敗しました');
-      if(btn){btn.disabled=false;btn.textContent=loaded.length===0?'詳細を表示（先頭10社）':`次の10社を表示（残り${batch.companies.length-loaded.length}社）`;}
+      if(btn){btn.disabled=false;btn.textContent=loaded.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${batch.companies.length-loaded.length}社）`;}
     }
   }catch(e){
     alert('エラー: '+e.message);
-    if(btn){btn.disabled=false;btn.textContent=loaded.length===0?'詳細を表示（先頭10社）':`次の10社を表示（残り${batch.companies.length-loaded.length}社）`;}
+    if(btn){btn.disabled=false;btn.textContent=loaded.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${batch.companies.length-loaded.length}社）`;}
   }
 }
 
@@ -403,7 +403,7 @@ function renderCards(){
           </div>
         </div>`;
       }).join('');
-      const loadMoreLabel=loaded.length===0?'詳細を表示（先頭10社）':`次の10社を表示（残り${totalCount-loaded.length}社）`;
+      const loadMoreLabel=loaded.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${totalCount-loaded.length}社）`;
       const up=b.userProfile;
       let profileHtml;
       if(!up||!up.profileType){
