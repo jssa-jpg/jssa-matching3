@@ -235,8 +235,8 @@ exports.handler=async(event)=>{
     }
 
     if(action==='getMemberOverview'){
-      // 紹介メール用に、会員自身の「事業概要」をAIで生成し、会社HPと合わせて返す
-      const{userId}=body;
+      // 紹介メール用に、会員自身の「事業概要」と、紹介先企業にとっての「面談メリット」をAIで生成し、会社HPと合わせて返す
+      const{userId,targetCompany,matchReason}=body;
       if(!userId)return{statusCode:400,headers,body:JSON.stringify({error:'userIdが必要です'})};
       const userRows=await getSheet(token,'ユーザー登録');
       const idx=userRows.findIndex((r,i)=>i>0&&r[0]===userId);
@@ -249,18 +249,27 @@ exports.handler=async(event)=>{
       };
       const isSupporter=!!(profile.supportCount||profile.supportArea||profile.investmentIndustry||profile.targetRound);
       let overview='';
+      let meetingBenefit='';
       if(ANTHROPIC_API_KEY){
         try{
           const details=isSupporter
             ?`支援実績件数：${profile.supportCount||'不明'}／得意な支援領域：${profile.supportArea||'不明'}／投資先・支援先の業種：${profile.investmentIndustry||'不明'}／対応可能なラウンド：${profile.targetRound||'不明'}`
             :`調達ラウンド：${profile.fundingRound||'不明'}／調達希望額：${profile.fundingTarget||'不明'}／事業課題：${profile.challenges||'不明'}／海外展開：${profile.globalExpansion||'不明'}／主要KPI：${profile.kpi||'不明'}`;
-          const prompt=`以下は、他社に紹介するメールに載せる「事業概要」の一文です。会員企業の情報をもとに、80文字程度の自然な日本語で作成してください。説明文のみを出力し、前置きや見出しは不要です。\n\n会社名：${u[2]||''}\n立場：${isSupporter?'支援者（投資家・VC等）':'スタートアップ'}\n情報：${details}`;
-          const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,messages:[{role:'user',content:prompt}]})});
+          const prompt=`あなたはJSSA（日本スタートアップ支援協会）の紹介メール作成を支援するアシスタントです。\n以下の会員企業の情報をもとに、2つの文章を作成してください。\n\n会社名：${u[2]||''}\n立場：${isSupporter?'支援者（投資家・VC等）':'スタートアップ'}\n情報：${details}\n${targetCompany?`紹介先企業：${targetCompany}\n`:''}${matchReason?`マッチ理由：${matchReason}\n`:''}\n\n① 事業概要：他社に紹介するメールに載せる、この会員企業の事業概要。80文字程度の自然な日本語。\n② 面談メリット：紹介先企業（${targetCompany||'紹介先企業'}）から見て、この会員と面談することにどんなメリットがあるかを、150文字程度の自然な日本語で。紹介先企業の立場で読んで前向きになれる、具体的で説得力のある内容にしてください。\n\n以下のJSON形式のみで出力してください。前置きや説明文は不要です。\n{"overview":"①の文章","meetingBenefit":"②の文章"}`;
+          const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,messages:[{role:'user',content:prompt}]})});
           const aiData=await aiRes.json();
-          overview=(aiData.content&&aiData.content[0]?aiData.content[0].text:'').trim();
-        }catch(e){console.error('事業概要生成エラー:',e.message);}
+          const aiText=(aiData.content&&aiData.content[0]?aiData.content[0].text:'').trim();
+          const cleanText=aiText.replace(/```json|```/g,'').trim();
+          try{
+            const parsed=JSON.parse(cleanText);
+            overview=parsed.overview||'';
+            meetingBenefit=parsed.meetingBenefit||'';
+          }catch(pe){
+            console.error('AI応答のJSON解析エラー:',pe.message,cleanText);
+          }
+        }catch(e){console.error('事業概要・面談メリット生成エラー:',e.message);}
       }
-      return{statusCode:200,headers,body:JSON.stringify({success:true,website,overview})};
+      return{statusCode:200,headers,body:JSON.stringify({success:true,website,overview,meetingBenefit})};
     }
 
     if(action==='getCompanyContacts'){

@@ -540,20 +540,20 @@ function openDetail(r){
   </div>`;
   document.getElementById('edit-msg').oninput=function(){document.getElementById('edit-char').textContent=this.value.length+'/2000';};
   area.scrollIntoView({behavior:'smooth'});
-  currentMemberOverview={website:'',overview:'',loaded:false};
+  currentMemberOverview={website:'',overview:'',meetingBenefit:'',loaded:false};
   loadCompanyContacts(r);
   loadMemberOverview(r);
 }
 
-let currentMemberOverview={website:'',overview:'',loaded:false};
+let currentMemberOverview={website:'',overview:'',meetingBenefit:'',loaded:false};
 
 async function loadMemberOverview(r){
   if(!r.userId)return;
   try{
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getMemberOverview',userId:r.userId})});
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getMemberOverview',userId:r.userId,targetCompany:r.targetCompany,matchReason:r.matchReason})});
     const data=await res.json();
     if(data.success){
-      currentMemberOverview={website:data.website||'',overview:data.overview||'',loaded:true};
+      currentMemberOverview={website:data.website||'',overview:data.overview||'',meetingBenefit:data.meetingBenefit||'',loaded:true};
       const sel=document.getElementById('contact-select');
       const idx=sel?sel.value:'';
       const contact=(idx!==''&&currentContacts[idx])?currentContacts[idx]:null;
@@ -599,7 +599,8 @@ function buildDefaultMsg(r,contact){
   const purposeLine=r.matchReason?`${memberName}様は${r.matchReason}との接点を希望されており、貴社をご紹介したくご連絡しました。`:`${memberName}様が貴社との面談をご希望されており、ご紹介したくご連絡しました。`;
   const overview=currentMemberOverview.loaded?(currentMemberOverview.overview||'（情報なし）'):'（事業概要を生成中です…）';
   const website=currentMemberOverview.loaded?(currentMemberOverview.website||'（未登録）'):'（読み込み中…）';
-  const defaultMsg=`${addressBlock}\n\nいつもお世話になっております。日本スタートアップ支援協会（JSSA）の岡隆宏です。\nこのたび、弊協会の会員企業である${memberCompany}の${memberName}様から、貴社と面談し、情報交換をしたいとのご希望をいただきました。${purposeLine}\n\n【ご紹介する会員】\n会社名：${memberCompany}\nお名前：${memberName}様\n事業概要：${overview}\n会社HP：${website}\n\nご面談をご検討いただける場合は、本メールにその旨をご返信いただけますでしょうか。私から${memberName}様を加えたメールでおつなぎしますので、その後、日程をご調整いただければ幸いです。\nご返信の際は、件名を変更せずにお願いいたします。\nどうぞよろしくお願いいたします。`;
+  const meetingBenefit=currentMemberOverview.loaded?(currentMemberOverview.meetingBenefit||'（情報なし）'):'（面談メリットを生成中です…）';
+  const defaultMsg=`${addressBlock}\n\nいつもお世話になっております。日本スタートアップ支援協会（JSSA）の岡隆宏です。\nこのたび、弊協会の会員企業である${memberCompany}の${memberName}様から、貴社と面談し、情報交換をしたいとのご希望をいただきました。${purposeLine}\n\n【ご紹介する会員】\n会社名：${memberCompany}\nお名前：${memberName}様\n事業概要：${overview}\n会社HP：${website}\n\n【面談メリット】\n${meetingBenefit}\n\nご面談をご検討いただける場合は、本メールにその旨をご返信いただけますでしょうか。私から${memberName}様を加えたメールでおつなぎしますので、その後、日程をご調整いただければ幸いです。\nご返信の際は、件名を変更せずにお願いいたします。\nどうぞよろしくお願いいたします。`;
   const ta=document.getElementById('edit-msg');
   ta.value=defaultMsg;
   document.getElementById('edit-char').textContent=defaultMsg.length+'/2000';
