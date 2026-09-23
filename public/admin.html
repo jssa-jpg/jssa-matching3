@@ -130,8 +130,8 @@ textarea:focus{border-color:#639922}
       <div class="stat-card"><div class="stat-num red" id="stat-ng">0</div><div class="stat-label">却下</div></div>
     </div>
     <div class="tabs">
-      <button class="tab" onclick="setTab('matches')">📋 マッチング結果</button>
-      <button class="tab active" onclick="setTab('all')">ユーザー返信</button>
+      <button class="tab active" onclick="setTab('matches')">📋 マッチング結果</button>
+      <button class="tab" onclick="setTab('all')">ユーザー返信</button>
       <button class="tab" onclick="setTab('new')">未処理</button>
       <button class="tab" onclick="setTab('done')">承認済み</button>
       <button class="tab" onclick="setTab('ng')">却下</button>
@@ -147,7 +147,7 @@ let adminPassword='';
 let allRequests=[];
 let trashItems=[];
 let matchBatches=[];
-let currentTab='all';
+let currentTab='matches';
 let isDetailOpen=false;
 let autoRefreshTimer=null;
 
@@ -156,7 +156,7 @@ function doLogin(){
   if(!pw){return;}
   adminPassword=pw;
   document.getElementById('login-err').style.display='none';
-  loadRequests();
+  loadMatchResults();
 }
 
 function logout(){
