@@ -18,4 +18,9 @@
 
 [functions]
   node_bundler = "esbuild"
+
+[functions."admin-api"]
+  timeout = 26
+
+[functions."resend-inbound"]
   timeout = 26
