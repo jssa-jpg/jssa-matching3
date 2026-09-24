@@ -111,7 +111,25 @@ function trimQuotedText(text) {
   return text.slice(0, cutIndex).trim();
 }
 
-async function extractCompaniesWithAI(candidateCompanies, subject, bodyText) {
+// 返信に引用された元メールから「1. 会社名」形式の行を抽出する
+function extractNumberedList(text) {
+  // 元メールの一覧部分（【マッチング企業一覧】以降）があればそこから抽出。返信本文側の「2. ○○でお願いします」を拾わないため
+  const src = text || '';
+  const idx = src.lastIndexOf('【マッチング企業一覧】');
+  const target = idx >= 0 ? src.slice(idx) : src;
+  const map = new Map();
+  const re = /^[\s>]*(\d{1,2})\s*[\.．、)）]\s*(.+?)\s*$/gm;
+  let m;
+  while ((m = re.exec(target)) !== null) {
+    const no = parseInt(m[1], 10);
+    const name = m[2].trim();
+    if (!name || /^会社概要|^推薦理由/.test(name)) continue;
+    map.set(no, name); // 同じ番号が複数あれば後ろ（引用された元メール側）を優先
+  }
+  return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([no, name]) => ({ no, name }));
+}
+
+async function extractCompaniesWithAI(candidateCompanies, subject, bodyText, numberedList) {
   if (!ANTHROPIC_API_KEY || candidateCompanies.length === 0) {
     return { companies: [], noneRequested: false, note: 'AI未設定、または候補企業なし' };
   }
@@ -119,14 +137,18 @@ async function extractCompaniesWithAI(candidateCompanies, subject, bodyText) {
 以下は、会員に送った「マッチング企業のご案内」メールへの返信メール本文です。
 会員は、面談・情報交換を希望する企業の「会社名」を返信に書いています（該当なしの場合もあります）。
 
-【元メールで提示した企業一覧】
-${candidateCompanies.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+【候補企業（この中からだけ選ぶ）】
+${candidateCompanies.map(c => `・${c}`).join('\n')}
+
+【元メールでの番号付き一覧（返信に引用された元メールから抽出。番号で指定された場合はこの番号で解釈する）】
+${numberedList.length > 0 ? numberedList.map(n => `${n.no}. ${n.name}`).join('\n') : '（抽出できませんでした）'}
 
 【返信メール本文】
 ${bodyText.slice(0, 3000)}
 
 上記の企業一覧の中から、返信メールで面談を希望していると読み取れる企業名だけを、一覧の表記そのままで抽出してください。
-表記ゆれ（全角/半角、株式会社の有無、スペース、番号のみの指定など）があっても、一覧の中から対応する会社を選んでください。
+表記ゆれ（全角/半角、株式会社の有無、スペースなど）があっても、候補企業の中から対応する会社を選んでください。
+会社名が書かれている場合は会社名を最優先してください。番号だけで指定されている場合は、上の「元メールでの番号付き一覧」の番号で解釈してください。
 一覧にない企業名を新しく作らないでください。
 「該当なし」「今回は見送り」「希望する企業がない」など、希望企業がないという趣旨の返信の場合は none_requested を true にしてください。
 判断に迷う場合は無理に含めず、空配列のままにしてください。
@@ -223,7 +245,7 @@ exports.handler = async (event) => {
 
     // 2. 重複処理防止：同じメールを既に処理済みでないか確認
     const existingRequests = await getSheet(token, '会いたいリクエスト');
-    const alreadyProcessed = existingRequests.some(r => (r[11] || '').includes(`[mail:${emailId}]`));
+    const alreadyProcessed = existingRequests.some(r => `${r[11] || ''}${r[12] || ''}`.includes(`[mail:${emailId}]`));
     if (alreadyProcessed) {
       console.log('既に処理済みのメールです:', emailId);
       return { statusCode: 200, body: 'duplicate, skipped' };
@@ -280,14 +302,17 @@ exports.handler = async (event) => {
       return { statusCode: 200, body: 'no matching batch' };
     }
 
-    const candidateCompanies = [...new Set(batchRows.map(r => r[6]).filter(Boolean))];
+    // 候補は実際にメールで案内した「企業名送信済み」の企業に限定する（未案内の企業が誤って選ばれるのを防ぐ）
+    const sentRows = batchRows.filter(r => r[8] === '企業名送信済み');
+    const candidateCompanies = [...new Set((sentRows.length > 0 ? sentRows : batchRows).map(r => r[6]).filter(Boolean))];
+    const numberedList = extractNumberedList(rawText);
     const userId = batchRows[0][2] || '';
     const userCompany = batchRows[0][3] || '';
     const userName = batchRows[0][4] || '';
     const userEmail = batchRows[0][5] || fromEmail;
 
     // 4. AIでメール本文から希望企業を抽出
-    const extraction = await extractCompaniesWithAI(candidateCompanies, subject, bodyText);
+    const extraction = await extractCompaniesWithAI(candidateCompanies, subject, bodyText, numberedList);
 
     if (extraction.noneRequested || extraction.companies.length === 0) {
       await sendOfficeMail(
@@ -306,8 +331,8 @@ exports.handler = async (event) => {
         requestId, userId, company, '', 'リクエスト受付', now, now,
         userCompany, userName, userEmail,
         bodyText.slice(0, 2000),
-        `🤖 AIがメール返信を自動解析して登録しました（要確認）。${marker}`,
-        ''
+        '',
+        `🤖 AIがメール返信を自動解析して登録しました（要確認）。${marker}`
       ]);
     }
 
