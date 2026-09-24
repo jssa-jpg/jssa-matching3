@@ -235,12 +235,24 @@ exports.handler = async (event) => {
     const matchRows = await getSheet(token, 'マッチング結果');
     let targetBatchId = null;
     for (const to of toList) {
-      const addr = extractEmailAddress(to) || to.toLowerCase();
-      const m = addr.match(/^reply\+([^@]+)@/);
+      // 注意：base64urlは大文字・小文字を区別するため、ここでは小文字化しない
+      const mAngle = String(to || '').match(/<([^>]+)>/);
+      const addr = (mAngle ? mAngle[1] : String(to || '')).trim();
+      const m = addr.match(/^reply\+([^@]+)@/i);
       if (m) {
-        // admin-api.js の sendCompanyNames で base64url エンコードして埋め込んでいるのでデコードする
-        try { targetBatchId = Buffer.from(m[1], 'base64url').toString('utf8'); }
-        catch (e) { targetBatchId = m[1]; }
+        const tokenPart = m[1];
+        // 1) そのままデコードしてバッチIDを照合
+        let decoded = null;
+        try { decoded = Buffer.from(tokenPart, 'base64url').toString('utf8'); } catch (e) { decoded = null; }
+        if (decoded && matchRows.slice(1).some(r => r[0] === decoded)) {
+          targetBatchId = decoded;
+        } else {
+          // 2) メール経路で小文字化された場合に備え、シート上の各バッチIDをエンコードし、大文字・小文字を無視して照合
+          const lowerToken = tokenPart.toLowerCase();
+          const hit = matchRows.slice(1).find(r => r[0] && Buffer.from(String(r[0])).toString('base64url').toLowerCase() === lowerToken);
+          targetBatchId = hit ? hit[0] : decoded;
+        }
+        console.log('返信先トークンから特定したバッチID:', targetBatchId);
         break;
       }
     }
