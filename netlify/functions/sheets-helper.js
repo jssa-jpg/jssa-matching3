@@ -354,4 +354,29 @@ async function getAccessToken(serviceAccount) {
   return data.access_token;
 }
 
-module.exports = { getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
+// 会員に「企業名送信済み」（岡代表が採択してメールで案内済み）の企業名一覧を、マッチング結果シートから取得する。
+// 次回以降のマッチングで、既に紹介した企業を候補から除外するために使う。
+async function getIntroducedCompanies(userId) {
+  try {
+    if (!userId) return [];
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('マッチング結果')}`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    const data = await res.json();
+    const rows = data.values || [];
+    // 列: A=バッチID, C=ユーザーID, G=マッチ企業名, I=ステータス
+    return [...new Set(rows.slice(1)
+      .filter(r => String(r[2] || '') === String(userId) && r[8] === '企業名送信済み')
+      .map(r => r[6])
+      .filter(Boolean))];
+  } catch (e) {
+    console.error('getIntroducedCompanies error:', e.message);
+    return [];
+  }
+}
+
+module.exports = { getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };

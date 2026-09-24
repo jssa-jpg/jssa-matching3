@@ -1,4 +1,4 @@
-const{getParticipants,getMatchHistory,getMonthlyRequestCount,saveMatchResultsForReview}=require('./sheets-helper');
+const{getParticipants,getIntroducedCompanies,saveMatchResultsForReview}=require('./sheets-helper');
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const rateLimit=new Map();
 function checkRateLimit(ip){const now=Date.now();const entry=rateLimit.get(ip)||{count:0,reset:now+60000};if(now>entry.reset){entry.count=0;entry.reset=now+60000;}entry.count++;rateLimit.set(ip,entry);return entry.count<=30;}
@@ -184,7 +184,9 @@ userId=ui.id||ui.company||"";
 }
 const all=await getParticipants();
 const exc=new Set();
-if(userId){try{const h=await getMatchHistory(userId);if(Array.isArray(h)){h.filter(x=>x&&x.requested).forEach(x=>exc.add(x.company));}}catch(e){console.error('getMatchHistory error:',e.message);}}
+// 既にこの会員へ企業名を案内済み（マッチング結果シートで「企業名送信済み」）の企業は候補から除外する
+const normCo=s=>String(s||'').normalize('NFKC').replace(/\s+/g,'').toLowerCase();
+if(userId){try{const introduced=await getIntroducedCompanies(userId);introduced.forEach(c=>exc.add(normCo(c)));if(introduced.length)console.log(`案内済み企業を除外: ${introduced.length}社`);}catch(e){console.error('getIntroducedCompanies error:',e.message);}}
 
 // 企業名ピンポイント検索
 // ※アプリ2の仕様：検索結果もユーザーには非公開。管理者レビュー用に保存するのみ。
@@ -201,7 +203,7 @@ if(companySearch){
 
 const cands=all.filter(p=>{
 if(!p||!p.company)return false;
-if(exc.has(p.company))return false;
+if(exc.has(normCo(p.company)))return false;
 const pl=p.listingStatus==="上場企業";
 if(listed==="上場企業のみ"&&!pl)return false;
 if(listed==="未上場のみ"&&pl)return false;
