@@ -76,7 +76,7 @@ async function deleteRow(token,sheetId,rowIndex){
 
 async function appendRow(token,sheetName,values){
   const id=process.env.GOOGLE_SHEET_ID;
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=RAW`,{
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(sheetName+'!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{
     method:'POST',
     headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
     body:JSON.stringify({values:[values]})
@@ -366,7 +366,13 @@ exports.handler=async(event)=>{
 
     if(action==='delete'){
       const{rowIndex,requestId,userId,targetCompany,targetPosition,status,createdAt,updatedAt,memberCompany,memberName,memberEmail,message,matchReason,recommendation}=body;
-      // ゴミ箱に移動
+      // ゴミ箱に移動（見出し行が無ければ先に作成）
+      const trashRows=await getSheet(token,'ゴミ箱');
+      if(!trashRows.length||!trashRows[0]||trashRows[0][0]!=='リクエストID'){
+        if(!trashRows.length||!(trashRows[0]||[]).some(v=>v)){
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${process.env.GOOGLE_SHEET_ID}/values/${encodeURIComponent('ゴミ箱!A1')}?valueInputOption=RAW`,{method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[['リクエストID','ユーザーID','相手企業名','相手担当者名','ステータス','リクエスト日時','処理日時','会員会社名','会員氏名','会員メール','メッセージ(第一声・返信本文)','マッチ理由','推薦理由・メモ','削除日時']]})});
+        }
+      }
       const deletedAt=new Date().toISOString();
       await appendRow(token,'ゴミ箱',[requestId||'',userId||'',targetCompany||'',targetPosition||'',status||'',createdAt||'',updatedAt||'',memberCompany||'',memberName||'',memberEmail||'',message||'',matchReason||'',recommendation||'',deletedAt]);
       // 元の行を削除

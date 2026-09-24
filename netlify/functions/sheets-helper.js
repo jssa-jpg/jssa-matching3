@@ -117,7 +117,7 @@ async function saveMatchHistory(userId, matches) {
     const yearMonth = now.slice(0, 7);
     const values = matches.map(m => [String(userId), m.company, now, m.score, m.requested ? "1" : "0", yearMonth]);
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E3%83%9E%E3%83%83%E3%83%81%E3%83%B3%E3%82%B0%E5%B1%A5%E6%AD%B4:append?valueInputOption=RAW`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E3%83%9E%E3%83%83%E3%83%81%E3%83%B3%E3%82%B0%E5%B1%A5%E6%AD%B4%21A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
       { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values }) }
     );
   } catch (e) {
@@ -233,7 +233,7 @@ async function getUserBalance(userId, limit) {
     const rowIndex = rows.findIndex(r => r[0] === String(userId));
     if (rowIndex < 0) {
       // 初回アクセス：今月分の上限をそのまま付与して記録
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET)}:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(limit)]] }) });
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET+'!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(limit)]] }) });
       return limit;
     }
     const lastMonth = rows[rowIndex][1] || yearMonth;
@@ -264,7 +264,7 @@ async function decrementUserBalance(userId, limit, count) {
     const rowIndex = rows.findIndex(r => r[0] === String(userId));
     if (rowIndex < 0) {
       const balance = limit - count;
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET)}:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET+'!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
       return;
     }
     const lastMonth = rows[rowIndex][1] || yearMonth;
@@ -292,7 +292,7 @@ async function setUserBalance(userId, balance) {
       const range = `${BALANCE_SHEET}!B${rowIndex + 1}:C${rowIndex + 1}`;
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[yearMonth, String(balance)]] }) });
     } else {
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET)}:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET+'!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
     }
   } catch (e) {
     console.error('setUserBalance error:', e.message);
@@ -316,7 +316,7 @@ async function saveMatchResultsForReview(userId, userInfo, matches, aiParams) {
       userInfo.email || '', m.company, String(m.score || ''), '未通知', aiParamsJson, String(m.cardRow || ''), memberRank
     ]);
     await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('マッチング結果')}:append?valueInputOption=RAW`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('マッチング結果'+'!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
       { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values }) }
     );
   } catch (e) {

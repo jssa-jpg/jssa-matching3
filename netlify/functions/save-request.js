@@ -30,14 +30,14 @@ async function incrementMonthlyCount(userId,token){
     const range=`月次リクエスト数!C${rowIndex+1}`;
     await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,{method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[String(currentCount+1)]]})});
   }else{
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数:append?valueInputOption=RAW`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[String(userId),yearMonth,"1"]]})});
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('月次リクエスト数!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[String(userId),yearMonth,"1"]]})});
   }
 }
 
 async function saveRequest(userId,userInfo,targetCompany,targetPosition,firstMessage,matchReason,recommendation,token){
   const sheetId=process.env.GOOGLE_SHEET_ID;
   const requestId=`REQ-${Date.now()}`;
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/会いたいリクエスト:append?valueInputOption=RAW`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[requestId,String(userId),targetCompany||'',targetPosition||'','リクエスト受付',new Date().toISOString(),'',userInfo.company||'',userInfo.name||'',userInfo.email||'',firstMessage||'',matchReason||'',recommendation||'']]})});
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('会いたいリクエスト!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[requestId,String(userId),targetCompany||'',targetPosition||'','リクエスト受付',new Date().toISOString(),'',userInfo.company||'',userInfo.name||'',userInfo.email||'',firstMessage||'',matchReason||'',recommendation||'']]})});
 }
 
 const rateLimit=new Map();

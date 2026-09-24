@@ -38,7 +38,7 @@ exports.handler=async(event)=>{
       if(!company)return{statusCode:400,headers,body:JSON.stringify({error:'会社名が必要です'})};
       const exists=rows.slice(1).some(r=>r[0]===userId&&r[1]===company);
       if(exists)return{statusCode:200,headers,body:JSON.stringify({success:true,message:'既に登録済みです'})};
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('お気に入り')}:append?valueInputOption=RAW`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[userId,company,position||'',new Date().toISOString()]]})});
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('お気に入り'+'!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[userId,company,position||'',new Date().toISOString()]]})});
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:'お気に入りに追加しました'})};
     }
 
