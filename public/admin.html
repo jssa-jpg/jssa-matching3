@@ -534,6 +534,7 @@ function openDetail(r){
     <label class="edit-label">② メッセージ（自動生成・編集可能）</label>
     <textarea id="edit-msg" rows="12"></textarea>
     <div class="char-count" id="edit-char">0/2000</div>
+    <div style="font-size:12px;color:#6b7280;margin:-4px 0 12px">※送信時に、本文の末尾へ岡代表の署名（イベント予定・協会情報）が自動で付きます。</div>
     <div class="detail-actions">
       <button class="btn-cancel" onclick="closeDetail()">キャンセル</button>
       <button class="btn-send" id="btn-send" onclick='sendRecommendation(${JSON.stringify(r).replace(/'/g,"&#39;")})'>📨 推薦メールを送信する</button>
