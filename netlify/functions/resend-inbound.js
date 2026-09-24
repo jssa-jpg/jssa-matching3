@@ -101,6 +101,8 @@ function trimQuotedText(text) {
     /^On .{0,80}wrote:$/mi,
     /^\d{4}年\d{1,2}月\d{1,2}日.{0,40}さんは書きました[：:]?/m,
     /^>{1,}/m,
+    /^(From|差出人)\s*[:：]/m,
+    /^_{5,}/m,
     /日本スタートアップ支援協会（JSSA）の岡隆宏です。/,
   ];
   let cutIndex = text.length;
@@ -185,7 +187,8 @@ async function sendOfficeMail(subject, text) {
         from: OFFICE_FROM,
         to: [OFFICE_EMAIL],
         subject,
-        html: `<div style="font-family:sans-serif;white-space:pre-wrap;font-size:14px;line-height:1.8;">${text.replace(/</g, '&lt;')}</div>`
+        text,
+        html: `<div style="font-family:sans-serif;font-size:14px;line-height:1.8;">${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r?\n/g, '<br>')}</div>`
       })
     });
   } catch (e) {
@@ -339,7 +342,7 @@ exports.handler = async (event) => {
     // 6. 岡代表へ通知
     await sendOfficeMail(
       `【自動検出】${userCompany || ''}${userName || ''}様から会いたい企業の返信（${extraction.companies.length}社）`,
-      `会員からの返信メールをAIが自動解析し、以下の企業を「会いたいリクエスト」に登録しました（ステータス：未処理・要確認）。\n\n会員：${userCompany} ${userName}（${userEmail}）\n\n検出した企業：\n${extraction.companies.map(c => '・' + c).join('\n')}\n\n---元の返信メール---\n${bodyText.slice(0, 1000)}\n\n管理画面の「会いたいリクエスト」タブから内容を確認し、問題なければ担当者選定・推薦メール送信を行ってください。`
+      `会員からの返信メールをAIが自動解析し、以下の企業を「会いたいリクエスト」に登録しました。\n（ステータス：未処理・要確認）\n\n■ 会員\n${userCompany} ${userName} 様\n${userEmail}\n\n■ 検出した企業\n${extraction.companies.map(c => '・' + c).join('\n')}\n\n■ 元の返信メール\n${bodyText.slice(0, 1000)}\n\n────────────────\n管理画面の「ユーザー返信」タブで内容を確認し、問題なければ担当者の選定と推薦メールの送信を行ってください。`
     );
 
     return { statusCode: 200, body: JSON.stringify({ success: true, detected: extraction.companies }) };
