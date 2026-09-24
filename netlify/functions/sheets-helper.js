@@ -173,17 +173,55 @@ function _monthDiff(fromYM, toYM) {
   return (ty - fy) * 12 + (tm - fm);
 }
 
-async function _readBalanceRows(token, sheetId) {
-  const res = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E6%9C%88%E6%AC%A1%E3%83%AA%E3%82%AF%E3%82%A8%E3%82%B9%E3%83%88%E6%95%B0`,
-    { headers: { 'Authorization': `Bearer ${token}` } }
-  );
+// 紹介可能残高は、アプリ1が使う「月次リクエスト数」（月ごとのリクエスト回数）とは別の「紹介残高」シートで管理する。
+// 同じスプレッドシートをアプリ1と共有しているため、同じシートに別の意味の数字を書き込まないようにする。
+// 列: A=ユーザーID, B=最終更新年月, C=紹介残高
+const BALANCE_SHEET = '紹介残高';
+const LEGACY_SHEET = '月次リクエスト数';
+
+async function _getValues(token, sheetId, range) {
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`, { headers: { 'Authorization': `Bearer ${token}` } });
   const data = await res.json();
-  return data.values || [];
+  return { ok: res.ok, values: data.values || [] };
+}
+
+// 「紹介残高」シートが無ければ作成し、アプリ2の会員（ユーザー登録シートにいる会員）の残高を旧シートから引き継ぐ
+async function _ensureBalanceSheet(token, sheetId) {
+  const first = await _getValues(token, sheetId, BALANCE_SHEET);
+  if (first.ok) return first.values;
+  const createRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+    method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: BALANCE_SHEET } } }] })
+  });
+  if (!createRes.ok) {
+    // 同時アクセスで既に作成済みの場合は読み直す
+    const again = await _getValues(token, sheetId, BALANCE_SHEET);
+    return again.values;
+  }
+  const users = (await _getValues(token, sheetId, 'ユーザー登録')).values.slice(1).map(r => String(r[0] || '').trim()).filter(Boolean);
+  const userSet = new Set(users);
+  const legacy = (await _getValues(token, sheetId, LEGACY_SHEET)).values.slice(1);
+  const seeded = [];
+  const seen = new Set();
+  for (const r of legacy) {
+    const uid = String(r[0] || '').trim();
+    if (!userSet.has(uid) || seen.has(uid)) continue;
+    seen.add(uid);
+    seeded.push([uid, r[1] || '', String(r[2] || '0')]);
+  }
+  const values = [['ユーザーID', '最終更新年月', '紹介残高'], ...seeded];
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET + '!A1')}?valueInputOption=RAW`, {
+    method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values })
+  });
+  return values;
+}
+
+async function _readBalanceRows(token, sheetId) {
+  return await _ensureBalanceSheet(token, sheetId);
 }
 
 // 会員の現在の紹介可能残高を取得する。未使用分は繰り越されるが、上限は「月次上限の2か月分」まで。
-// 列: A=ユーザーID, B=最終更新年月, C=残高
 async function getUserBalance(userId, limit) {
   try {
     const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -195,7 +233,7 @@ async function getUserBalance(userId, limit) {
     const rowIndex = rows.findIndex(r => r[0] === String(userId));
     if (rowIndex < 0) {
       // 初回アクセス：今月分の上限をそのまま付与して記録
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(limit)]] }) });
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET)}:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(limit)]] }) });
       return limit;
     }
     const lastMonth = rows[rowIndex][1] || yearMonth;
@@ -203,7 +241,7 @@ async function getUserBalance(userId, limit) {
     const months = _monthDiff(lastMonth, yearMonth);
     if (months > 0) {
       balance = Math.min(balance + limit * months, cap);
-      const range = `月次リクエスト数!B${rowIndex + 1}:C${rowIndex + 1}`;
+      const range = `${BALANCE_SHEET}!B${rowIndex + 1}:C${rowIndex + 1}`;
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[yearMonth, String(balance)]] }) });
     }
     return balance;
@@ -226,7 +264,7 @@ async function decrementUserBalance(userId, limit, count) {
     const rowIndex = rows.findIndex(r => r[0] === String(userId));
     if (rowIndex < 0) {
       const balance = limit - count;
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET)}:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
       return;
     }
     const lastMonth = rows[rowIndex][1] || yearMonth;
@@ -234,7 +272,7 @@ async function decrementUserBalance(userId, limit, count) {
     const months = _monthDiff(lastMonth, yearMonth);
     if (months > 0) balance = Math.min(balance + limit * months, cap);
     balance -= count;
-    const range = `月次リクエスト数!B${rowIndex + 1}:C${rowIndex + 1}`;
+    const range = `${BALANCE_SHEET}!B${rowIndex + 1}:C${rowIndex + 1}`;
     await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[yearMonth, String(balance)]] }) });
   } catch (e) {
     console.error('decrementUserBalance error:', e.message);
@@ -251,10 +289,10 @@ async function setUserBalance(userId, balance) {
     const rows = await _readBalanceRows(token, sheetId);
     const rowIndex = rows.findIndex(r => r[0] === String(userId));
     if (rowIndex >= 0) {
-      const range = `月次リクエスト数!B${rowIndex + 1}:C${rowIndex + 1}`;
+      const range = `${BALANCE_SHEET}!B${rowIndex + 1}:C${rowIndex + 1}`;
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[yearMonth, String(balance)]] }) });
     } else {
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(BALANCE_SHEET)}:append?valueInputOption=RAW`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[String(userId), yearMonth, String(balance)]] }) });
     }
   } catch (e) {
     console.error('setUserBalance error:', e.message);
