@@ -6,17 +6,17 @@ const ADMIN_PASSWORD=process.env.ADMIN_PASSWORD;
 
 const SIGNATURE=`・・・・・・・・・・・・・・・・・・・・・・・・・・・・・・・
 今後のイベント開催予定（ホールドお願いします）
-2026年10月29日京都開催
-2026年11月27日沖縄開催(変更）
-2026年12月22日東京開催
+2026年10月29日京都開催https://peatix.com/event/5096892
+2026年11月27日沖縄開催https://peatix.com/event/5079069
+2026年12月22日東京開催（制作中）
+▼協会総合案内スライド（スタートアップ会員、スポンサー会員、サポート会員）
+https://bit.ly/4hurkVp
 ▼イベント事務局募集中
 https://forms.gle/Yno7VWDZEKnBefqV7
 ▼スタートアップ会員募集要項
 https://bit.ly/4xd1CJG
 ▼スタートアップ入会説明会／下記からご都合の良い日時をお選びください。
 https://coubic.com/jssa/3008775
-下記のガイダンスを事前にお読みください。
-https://www.yumeplanning.jp/guidance/
 ・・・・・・・・・・・・・・・・・・・・・・・・・・・・・・・・・
 一般社団法人　日本スタートアップ支援協会
 代表理事　岡　隆宏
