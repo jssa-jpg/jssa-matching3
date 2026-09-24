@@ -237,7 +237,12 @@ exports.handler = async (event) => {
     for (const to of toList) {
       const addr = extractEmailAddress(to) || to.toLowerCase();
       const m = addr.match(/^reply\+([^@]+)@/);
-      if (m) { targetBatchId = m[1]; break; }
+      if (m) {
+        // admin-api.js の sendCompanyNames で base64url エンコードして埋め込んでいるのでデコードする
+        try { targetBatchId = Buffer.from(m[1], 'base64url').toString('utf8'); }
+        catch (e) { targetBatchId = m[1]; }
+        break;
+      }
     }
 
     let batchRows;

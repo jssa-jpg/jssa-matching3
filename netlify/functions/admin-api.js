@@ -199,7 +199,9 @@ exports.handler=async(event)=>{
       const mailText=`${userName||''} 様\n\n日本スタートアップ支援協会（JSSA）の岡隆宏です。\n平素よりお世話になっております。\n\n登録いただいた希望条件をもとに、私が相性の良い企業様を選定いたしましたので、以下の通り案内します。\n\n【マッチング企業一覧】\n\n${list}\n\nこの中で面談・情報交換を希望される企業様を、本メールに返信する形で会社名をお知らせください。\nすでに商談済みの企業や希望する企業がない場合は該当なしと返信ください。再度検討選定します。\n\n${SIGNATURE}`;
       // 返信先を「reply+バッチID@受信用ドメイン」にすることで、自動処理側がどのマッチング結果への返信かを確実に特定できるようにする
       const inboundDomain=process.env.INBOUND_REPLY_DOMAIN||'reply.yumeplanning.jp';
-      const replyTo=batchId?`reply+${batchId}@${inboundDomain}`:OFFICE_EMAIL;
+      // バッチIDにはISO日時由来のコロン(:)等、メールアドレスのローカル部として不正な文字が含まれるため、
+      // base64urlエンコードしてメールアドレスに埋め込む（受信側でデコードして元のバッチIDに戻す）
+      const replyTo=batchId?`reply+${Buffer.from(String(batchId)).toString('base64url')}@${inboundDomain}`:OFFICE_EMAIL;
       const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'tok@yumeplanning.jp',to:[userEmail],reply_to:replyTo,subject:'【JSSA】マッチング企業のご案内',html:`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:10px;"><div style="background:#0B0F1A;padding:14px 20px;border-radius:8px;margin-bottom:20px;"><span style="background:#639922;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;">JSSA</span><span style="color:#fff;font-size:13px;margin-left:8px;">日本スタートアップ支援協会</span></div><div style="font-size:14px;color:#374151;line-height:1.8;">${mailText.replace(/\n/g,'<br>')}</div></div>`})});
       const resData=await res.json();
       if(!res.ok)return{statusCode:500,headers,body:JSON.stringify({error:'メール送信失敗: '+JSON.stringify(resData)})};
