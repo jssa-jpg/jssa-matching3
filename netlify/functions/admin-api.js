@@ -199,7 +199,7 @@ exports.handler=async(event)=>{
       let userCompany=body.userCompany||'',userPosition='';
       if(userId){try{const u=(await getSheet(token,'ユーザー登録')).find(r=>String(r[0]||'').trim()===String(userId));if(u){userCompany=String(u[2]||userCompany).trim();userPosition=String(u[3]||'').trim();}}catch(e){console.error('宛名情報の取得エラー:',e.message);}}
       const addressee=[userCompany,userPosition,`${userName||''} 様`].filter(Boolean).join('\n');
-      const mailText=`${addressee}\n\n日本スタートアップ支援協会（JSSA）の岡隆宏です。\n平素よりお世話になっております。\n\n登録いただいた希望条件をもとに、私が相性の良い企業様を選定いたしましたので、以下の通り案内します。\n\n【マッチング企業一覧】\n\n${list}\n\nこの中で面談・情報交換を希望される企業様を、本メールに返信する形で会社名をお知らせください。\nすでに商談済みの企業や希望する企業がない場合は該当なしと返信ください。再度検討選定します。\n\n${SIGNATURE}`;
+      const mailText=`${addressee}\n\n日本スタートアップ支援協会（JSSA）の岡隆宏です。\n平素よりお世話になっております。\n\n登録いただいた希望条件をもとに、私が相性の良い企業様を選定いたしましたので、以下の通り案内します。\n\n【マッチング企業一覧】\n\n${list}\n\nこの中で面談・情報交換を希望される企業様がございましたら、本メールに返信する形で、番号と会社名（例：「1. ○○株式会社」）をお知らせください。複数社でも構いません。\nすでに商談済みの企業や、希望する企業がない場合は「該当なし」とご返信ください。改めて選定いたします。\n\n${SIGNATURE}`;
       // 返信先を「reply+バッチID@受信用ドメイン」にすることで、自動処理側がどのマッチング結果への返信かを確実に特定できるようにする
       const inboundDomain=process.env.INBOUND_REPLY_DOMAIN||'reply.yumeplanning.jp';
       // バッチIDにはISO日時由来のコロン(:)等、メールアドレスのローカル部として不正な文字が含まれるため、
