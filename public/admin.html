@@ -500,6 +500,16 @@ async function startEnrich(){
   sum.innerHTML=`${enrichStop?'停止しました':'完了しました'}：成功 <b>${enrichStats.ok}社</b>／失敗 ${enrichStats.ng}社。失敗した行は、もう一度「対象の行を探す」から再実行できます。<br>内容はスプレッドシートの「名刺データ」O〜W列で確認・修正できます。`;
 }
 
+// 名刺交換日を「2025年5月1日」の形式で表示する（読めない形式はそのまま、空欄は「未登録」）
+function formatCardDate(v){
+  const s=String(v||'').normalize('NFKC').trim();
+  if(!s)return '未登録';
+  const m=s.match(/(\d{4})\D+(\d{1,2})(?:\D+(\d{1,2}))?/);
+  if(m)return `${m[1]}年${parseInt(m[2],10)}月${m[3]?parseInt(m[3],10)+'日':''}`;
+  if(/^\d{5}$/.test(s)){const d=new Date(Date.UTC(1899,11,30)+parseInt(s,10)*86400000);return `${d.getUTCFullYear()}年${d.getUTCMonth()+1}月${d.getUTCDate()}日`;}
+  return s;
+}
+
 function setTab(tab){
   currentTab=tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -532,7 +542,7 @@ function renderCards(){
             <label for="${cid}" class="company-card-name">${c.company||'（企業名不明）'}${c.score?`（マッチ度${c.score}%）`:''}</label>
           </div>
           <div class="company-card-body">
-            <div class="cc-row"><span><b>部署:</b> ${c.department||'-'}</span><span><b>役職:</b> ${c.position||'-'}</span><span><b>担当者名:</b> ${c.name||'-'}</span></div>
+            <div class="cc-row"><span><b>部署:</b> ${c.department||'-'}</span><span><b>役職:</b> ${c.position||'-'}</span><span><b>担当者名:</b> ${c.name||'-'}</span><span><b>名刺交換日:</b> ${formatCardDate(c.cardDate)}</span></div>
             <div class="cc-row"><span><b>メール:</b> ${c.email||'-'}</span><span><b>電話:</b> ${c.telOffice||c.telDirect||c.mobile||'-'}</span></div>
             <div class="cc-row"><span><b>住所:</b> ${(c.zip?c.zip+' ':'')}${c.address||'-'}</span></div>
             <div class="cc-row"><span><b>業種:</b> ${c.industry||'-'}</span><span><b>従業員数:</b> ${c.employees||'-'}</span><span><b>設立:</b> ${c.founded||'-'}</span><span><b>資本金:</b> ${c.capital||'-'}</span><span><b>上場:</b> ${c.listed||'未上場'}</span></div>
