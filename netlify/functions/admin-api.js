@@ -195,7 +195,11 @@ exports.handler=async(event)=>{
       if(!userEmail)return{statusCode:400,headers,body:JSON.stringify({error:'送信先メールアドレスがありません'})};
       const details=(companyDetails&&companyDetails.length>0)?companyDetails:(companies||[]).map(c=>({name:c,overview:'',reason:''}));
       const list=details.map((c,i)=>`${i+1}. ${c.name}\n会社概要：${c.overview||'（情報なし）'}\n推薦理由：${c.reason||'（推薦理由情報なし）'}`).join('\n\n');
-      const mailText=`${userName||''} 様\n\n日本スタートアップ支援協会（JSSA）の岡隆宏です。\n平素よりお世話になっております。\n\n登録いただいた希望条件をもとに、私が相性の良い企業様を選定いたしましたので、以下の通り案内します。\n\n【マッチング企業一覧】\n\n${list}\n\nこの中で面談・情報交換を希望される企業様を、本メールに返信する形で会社名をお知らせください。\nすでに商談済みの企業や希望する企業がない場合は該当なしと返信ください。再度検討選定します。\n\n${SIGNATURE}`;
+      // 宛名に会社名・役職を入れるため、ユーザー登録シートから取得する（C列=会社名、D列=役職）
+      let userCompany=body.userCompany||'',userPosition='';
+      if(userId){try{const u=(await getSheet(token,'ユーザー登録')).find(r=>String(r[0]||'').trim()===String(userId));if(u){userCompany=String(u[2]||userCompany).trim();userPosition=String(u[3]||'').trim();}}catch(e){console.error('宛名情報の取得エラー:',e.message);}}
+      const addressee=[userCompany,userPosition,`${userName||''} 様`].filter(Boolean).join('\n');
+      const mailText=`${addressee}\n\n日本スタートアップ支援協会（JSSA）の岡隆宏です。\n平素よりお世話になっております。\n\n登録いただいた希望条件をもとに、私が相性の良い企業様を選定いたしましたので、以下の通り案内します。\n\n【マッチング企業一覧】\n\n${list}\n\nこの中で面談・情報交換を希望される企業様を、本メールに返信する形で会社名をお知らせください。\nすでに商談済みの企業や希望する企業がない場合は該当なしと返信ください。再度検討選定します。\n\n${SIGNATURE}`;
       // 返信先を「reply+バッチID@受信用ドメイン」にすることで、自動処理側がどのマッチング結果への返信かを確実に特定できるようにする
       const inboundDomain=process.env.INBOUND_REPLY_DOMAIN||'reply.yumeplanning.jp';
       // バッチIDにはISO日時由来のコロン(:)等、メールアドレスのローカル部として不正な文字が含まれるため、
