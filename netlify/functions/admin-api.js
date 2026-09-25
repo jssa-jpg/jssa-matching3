@@ -213,7 +213,7 @@ exports.handler=async(event)=>{
       if(!userEmail)return{statusCode:400,headers,body:JSON.stringify({error:'送信先メールアドレスがありません'})};
       const details=(companyDetails&&companyDetails.length>0)?companyDetails:(companies||[]).map(c=>({name:c,overview:'',reason:''}));
       // 会員へのメールには番号と会社名のみを載せる（会社概要・推薦理由は載せない）
-      const list=details.map((c,i)=>`${i+1}. ${c.name}`).join('\n\n');
+      const list=details.map((c,i)=>`${i+1}. ${c.name}\n会社概要：${c.overview||'（情報なし）'}\n推薦理由：${c.reason||'（推薦理由情報なし）'}`).join('\n\n');
       // 宛名に会社名・役職を入れるため、ユーザー登録シートから取得する（C列=会社名、D列=役職）
       let userCompany=body.userCompany||'',userPosition='';
       if(userId){try{const u=(await getSheet(token,'ユーザー登録')).find(r=>String(r[0]||'').trim()===String(userId));if(u){userCompany=String(u[2]||userCompany).trim();userPosition=String(u[3]||'').trim();}}catch(e){console.error('宛名情報の取得エラー:',e.message);}}
