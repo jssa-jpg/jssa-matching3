@@ -539,7 +539,7 @@ function renderCards(){
         return `<div class="company-card">
           <div class="company-card-head">
             <input type="checkbox" id="${cid}" ${checked} onchange="toggleCompanySelect('${b.batchId}',${c.rowIndex},this.checked)">
-            <label for="${cid}" class="company-card-name">${c.company||'（企業名不明）'}${c.score?`（マッチ度${c.score}%）`:''}</label>
+            <label for="${cid}" class="company-card-name">${c.company||'（企業名不明）'}${c.score?`（マッチ度${c.score}%）`:''}${c.tier===2?' <span style="background:#FEF3C7;color:#B45309;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">スポンサー</span>':c.tier===1?' <span style="background:#E0E7FF;color:#3730A3;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">協会顧問</span>':''}</label>
           </div>
           <div class="company-card-body">
             <div class="cc-row"><span><b>部署:</b> ${c.department||'-'}</span><span><b>役職:</b> ${c.position||'-'}</span><span><b>担当者名:</b> ${c.name||'-'}</span><span><b>名刺交換日:</b> ${formatCardDate(c.cardDate)}</span></div>

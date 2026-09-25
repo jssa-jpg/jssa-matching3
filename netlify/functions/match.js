@@ -1,4 +1,4 @@
-const{getParticipants,getIntroducedCompanies,saveMatchResultsForReview,cardTime}=require('./sheets-helper');
+const{getParticipants,getIntroducedCompanies,saveMatchResultsForReview,cardTime,getPriorityLists,priorityTier}=require('./sheets-helper');
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const rateLimit=new Map();
 function checkRateLimit(ip){const now=Date.now();const entry=rateLimit.get(ip)||{count:0,reset:now+60000};if(now>entry.reset){entry.count=0;entry.reset=now+60000;}entry.count++;rateLimit.set(ip,entry);return entry.count<=30;}
@@ -251,7 +251,12 @@ const coKey=c=>String(c||'').normalize('NFKC').replace(/\s/g,'');
 const companyLatest=new Map();
 for(const p of all){if(!p||!p.company)continue;const k=coKey(p.company);const t=cardTime(p.cardDate);if(t>(companyLatest.get(k)||0))companyLatest.set(k,t);}
 const cardTimeByRow=new Map(all.map(p=>[p.cardRow,cardTime(p.cardDate)]));
+// マッチ度が同じ場合の優先順位：①スポンサー ②協会顧問 ③名刺交換日が最も新しい社員がいる会社
+const priorityLists=await getPriorityLists();
+const tierCache=new Map();
+const tierOf=c=>{const k=coKey(c);if(!tierCache.has(k))tierCache.set(k,priorityTier(c,priorityLists));return tierCache.get(k);};
 scored.sort((a,b)=>(b.score-a.score)
+  ||(tierOf(b.company)-tierOf(a.company))
   ||((companyLatest.get(coKey(b.company))||0)-(companyLatest.get(coKey(a.company))||0))
   ||coKey(a.company).localeCompare(coKey(b.company))
   ||((cardTimeByRow.get(b.cardRow)||0)-(cardTimeByRow.get(a.cardRow)||0))

@@ -483,4 +483,46 @@ async function changeRequestBalance(userId, count, note) {
   return { rank: meta.rank, limit, cap, before, after, shortage };
 }
 
-module.exports = { changeRequestBalance, personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
+// ===== スポンサー・協会顧問の優先表示 =====
+// スプレッドシートの「スポンサー」シート（B列=社名）と「協会顧問」シート（E列=会社名、B列=処理）を読み込む。
+// 協会顧問のうち、処理が「退職」「転職」の方の会社は対象外。シートが無い場合は優先なしで動く。
+let _priorityCache = null, _priorityCacheTime = 0;
+function _priorityNorm(v) {
+  return String(v || '').normalize('NFKC').replace(/證/g, '証')
+    .replace(/株式会社|有限会社|合同会社|有限責任|一般社団法人|一般財団法人|公益社団法人|公益財団法人|\(株\)|（株）/g, '')
+    .replace(/[\s・,，.．&＆'’\-ー]/g, '').toLowerCase();
+}
+function _priorityKey(name) {
+  // 「野村証券大阪」「野村證券渋谷」のような拠点名付きの表記は、拠点名を外して照合する
+  return _priorityNorm(name).replace(/(大阪|渋谷|東京|名古屋|京都|神戸|福岡|札幌|本店|支店|本社)$/, '');
+}
+async function getPriorityLists() {
+  const now = Date.now();
+  if (_priorityCache && now - _priorityCacheTime < 5 * 60 * 1000) return _priorityCache;
+  const lists = { sponsors: [], advisors: [] };
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const sp = (await _getValues(token, sheetId, 'スポンサー')).values;
+    lists.sponsors = [...new Set(sp.map(r => String(r[1] || '').trim()).filter(v => v && v !== '社名').map(_priorityKey).filter(Boolean))];
+    const ad = (await _getValues(token, sheetId, '協会顧問')).values;
+    lists.advisors = [...new Set(ad.filter(r => !/退職|転職/.test(String(r[1] || '')))
+      .map(r => String(r[4] || '').trim()).filter(v => v && v !== '会社名').map(_priorityKey).filter(Boolean))];
+  } catch (e) {
+    console.error('getPriorityLists error:', e.message);
+  }
+  _priorityCache = lists; _priorityCacheTime = now;
+  return lists;
+}
+// 会社の優先区分：2=スポンサー、1=協会顧問、0=なし
+function priorityTier(company, lists) {
+  const c = _priorityNorm(company);
+  if (!c || !lists) return 0;
+  const hit = keys => keys.some(k => (k.length <= 3 ? c === k : c.includes(k)));
+  if (hit(lists.sponsors)) return 2;
+  if (hit(lists.advisors)) return 1;
+  return 0;
+}
+
+module.exports = { getPriorityLists, priorityTier, changeRequestBalance, personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };

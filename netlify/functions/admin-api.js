@@ -1,4 +1,4 @@
-const{getParticipants,setUserBalance,MONTHLY_LIMITS,personKey,isNewerCard,changeRequestBalance}=require('./sheets-helper');
+const{getParticipants,setUserBalance,MONTHLY_LIMITS,personKey,isNewerCard,changeRequestBalance,getPriorityLists,priorityTier}=require('./sheets-helper');
 const RESEND_API_KEY=process.env.RESEND_API_KEY;
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const OFFICE_EMAIL='tok@yumeplanning.jp';
@@ -144,6 +144,7 @@ exports.handler=async(event)=>{
       const{items,aiParams,applicant}=body;
       if(!Array.isArray(items)||items.length===0)return{statusCode:400,headers,body:JSON.stringify({error:'items is required'})};
       const cardRows=await getSheet(token,'名刺データ');
+      const priorityLists=await getPriorityLists();
       const results=items.map(it=>{
         const rowIdx=it.cardRow;
         let row=(rowIdx&&rowIdx>1)?cardRows[rowIdx-1]:null;
@@ -161,10 +162,10 @@ exports.handler=async(event)=>{
           }
         }
         if(!row){
-          return{company:it.company||'',score:it.score||'',found:false,department:'',position:'',name:'',email:'',zip:'',address:'',telOffice:'',telDept:'',telDirect:'',fax:'',mobile:'',siteUrl:'',cardDate:'',industry:'',scale:'',employees:'',founded:'',capital:'',listed:'',hiring:'',ma:'',features:'',facebook:''};
+          return{company:it.company||'',tier:priorityTier(it.company,priorityLists),score:it.score||'',found:false,department:'',position:'',name:'',email:'',zip:'',address:'',telOffice:'',telDept:'',telDirect:'',fax:'',mobile:'',siteUrl:'',cardDate:'',industry:'',scale:'',employees:'',founded:'',capital:'',listed:'',hiring:'',ma:'',features:'',facebook:''};
         }
         return{
-          found:true,score:it.score||'',
+          found:true,score:it.score||'',tier:priorityTier(it.company||row[0],priorityLists),
           company:row[0]||it.company||'',department:row[1]||'',position:row[2]||'',name:row[3]||'',
           email:row[4]||'',zip:row[5]||'',address:row[6]||'',telOffice:row[7]||'',telDept:row[8]||'',
           telDirect:row[9]||'',fax:row[10]||'',mobile:row[11]||'',siteUrl:row[12]||'',cardDate:row[13]||'',
