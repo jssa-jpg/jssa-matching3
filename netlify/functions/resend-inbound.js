@@ -10,6 +10,7 @@
 //   event: email.received で登録し、発行された signing secret を RESEND_WEBHOOK_SECRET に設定済み
 
 const crypto = require('crypto');
+const { changeRequestBalance } = require('./sheets-helper');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET;
@@ -339,10 +340,21 @@ exports.handler = async (event) => {
       ]);
     }
 
-    // 6. 岡代表へ通知
+    // 6. リクエスト回数を選んだ社数だけ減らす（アポが確定しなくても戻らない）
+    let balanceText = '';
+    try {
+      const b = await changeRequestBalance(userId, extraction.companies.length, `リクエスト -${extraction.companies.length}社（返信メール）`);
+      balanceText = `\n\n■ リクエスト回数\n${b.before}回 → ${b.after}回（${b.rank || '会員ランク未設定'}：毎月${b.limit}回、持ち越し込みで最大${b.cap}回）`;
+      if (b.shortage > 0) balanceText += `\n⚠ 残り回数を${b.shortage}社分超えるリクエストです。見送る場合は、管理画面で該当のリクエストを削除すると回数が戻ります。`;
+    } catch (e) {
+      console.error('リクエスト回数の減算エラー:', e.message);
+      balanceText = '\n\n■ リクエスト回数\n自動で減らせませんでした。紹介残高シートを確認してください。';
+    }
+
+    // 7. 岡代表へ通知
     await sendOfficeMail(
       `【自動検出】${userCompany || ''}${userName || ''}様から会いたい企業の返信（${extraction.companies.length}社）`,
-      `会員からの返信メールをAIが自動解析し、以下の企業を「会いたいリクエスト」に登録しました。\n（ステータス：未処理・要確認）\n\n■ 会員\n${userCompany} ${userName} 様\n${userEmail}\n\n■ 検出した企業\n${extraction.companies.map(c => '・' + c).join('\n')}\n\n■ 元の返信メール\n${bodyText.slice(0, 1000)}\n\n────────────────\n管理画面の「ユーザー返信」タブで内容を確認し、問題なければ担当者の選定と推薦メールの送信を行ってください。`
+      `会員からの返信メールをAIが自動解析し、以下の企業を「会いたいリクエスト」に登録しました。\n（ステータス：未処理・要確認）\n\n■ 会員\n${userCompany} ${userName} 様\n${userEmail}\n\n■ 検出した企業\n${extraction.companies.map(c => '・' + c).join('\n')}${balanceText}\n\n■ 元の返信メール\n${bodyText.slice(0, 1000)}\n\n────────────────\n管理画面の「ユーザー返信」タブで内容を確認し、問題なければ担当者の選定と推薦メールの送信を行ってください。`
     );
 
     return { statusCode: 200, body: JSON.stringify({ success: true, detected: extraction.companies }) };

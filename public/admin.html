@@ -796,7 +796,7 @@ async function doDecline(r){
 }
 
 async function doDelete(r){
-  if(!confirm(`このリクエストをゴミ箱に移動しますか？`))return;
+  if(!confirm(`このリクエストをゴミ箱に移動しますか？\n（未処理のリクエストを削除すると、会員のリクエスト回数が1回戻ります。見送り・承認済みのものは戻りません）`))return;
   try{
     const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'delete',rowIndex:r.rowIndex,requestId:r.requestId,userId:r.userId,targetCompany:r.targetCompany,targetPosition:r.targetPosition,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,memberCompany:r.memberCompany,memberName:r.memberName,memberEmail:r.memberEmail,message:r.message,matchReason:r.matchReason,recommendation:r.recommendation})});
     const data=await res.json();

@@ -457,4 +457,30 @@ async function getIntroducedCompanies(userId) {
   }
 }
 
-module.exports = { personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
+// 会員のリクエスト回数（紹介残高）を増減する。count>0で減らす（リクエスト時）、count<0で戻す（誤登録の削除時）。
+// 会員ランクは招待コードシートから取得し、月替わりの持ち越し（上限2か月分）も反映する。
+// 残り回数を超えるリクエストは0で止め、超過分を shortage として返す（岡代表が見送るか判断できるように）。
+async function changeRequestBalance(userId, count, note) {
+  const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+  const sheetId = process.env.GOOGLE_SHEET_ID;
+  const token = await getAccessToken(serviceAccount);
+  const meta = await _userMeta(token, sheetId, userId);
+  const limit = MONTHLY_LIMITS[meta.rank] || MONTHLY_LIMITS['default'];
+  const cap = limit * 2;
+  const yearMonth = new Date().toISOString().slice(0, 7);
+  const rows = await _readBalanceRows(token, sheetId);
+  const rowIndex = rows.findIndex(r => r[0] === String(userId));
+  let before = limit;
+  if (rowIndex >= 0) {
+    before = parseInt(rows[rowIndex][2] || '0');
+    const months = _monthDiff(rows[rowIndex][1] || yearMonth, yearMonth);
+    if (months > 0) before = Math.min(before + limit * months, cap);
+  }
+  const raw = before - count;
+  const after = Math.min(Math.max(raw, 0), cap);
+  const shortage = raw < 0 ? -raw : 0;
+  await _writeBalanceRow(token, sheetId, rows, userId, yearMonth, after, limit, `${note}（${before}→${after}）`);
+  return { rank: meta.rank, limit, cap, before, after, shortage };
+}
+
+module.exports = { changeRequestBalance, personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };

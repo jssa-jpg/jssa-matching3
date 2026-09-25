@@ -367,14 +367,14 @@ async function loadUserStatus(){
     if(rankEl)rankEl.textContent=`会員ランク：${data.memberRank}会員`;
     if(remEl){
       if(data.remaining>0){
-        remEl.textContent=`今月あと${data.remaining}社ご紹介可能です（上限${data.limit}社／月、繰り越しは最大2か月分まで）`;
+        remEl.textContent=`今月あと${data.remaining}回リクエストできます（毎月${data.limit}回、持ち越しは最大2か月分まで）`;
       }else{
-        remEl.textContent=`今月のご紹介上限に達しています。翌月に上限がリセットされると再度お申し込みいただけます`;
+        remEl.textContent=`今月のリクエスト回数を使い切りました。翌月1日に回数が追加されると、再度お申し込みいただけます`;
       }
     }
     if(submitBtn&&data.remaining<=0){
       submitBtn.disabled=true;
-      submitBtn.textContent='現在お申し込みいただけません（上限到達）';
+      submitBtn.textContent='現在お申し込みいただけません（リクエスト回数の上限到達）';
     }
   }catch(e){console.error('loadUserStatus error:',e);}
 }

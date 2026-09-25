@@ -1,4 +1,4 @@
-const{getParticipants,decrementUserBalance,setUserBalance,MONTHLY_LIMITS,personKey,isNewerCard}=require('./sheets-helper');
+const{getParticipants,setUserBalance,MONTHLY_LIMITS,personKey,isNewerCard,changeRequestBalance}=require('./sheets-helper');
 const RESEND_API_KEY=process.env.RESEND_API_KEY;
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const OFFICE_EMAIL='tok@yumeplanning.jp';
@@ -224,11 +224,7 @@ exports.handler=async(event)=>{
       if(Array.isArray(rowIndexes)){
         for(const idx of rowIndexes){await updateCell(token,'マッチング結果',idx,'I','企業名送信済み');}
       }
-      // 岡代表が採択して送信した企業数を、会員ランクに応じた上限（繰り越し上限2か月分）から差し引く
-      if(userId&&Array.isArray(companies)&&companies.length>0){
-        const limit=MONTHLY_LIMITS[memberRank]||MONTHLY_LIMITS['default'];
-        try{await decrementUserBalance(userId,limit,companies.length);}catch(e){console.error('残高減算エラー:',e.message);}
-      }
+      // ※リクエスト回数は企業名の案内時ではなく、会員が会いたい企業を返信（リクエスト）した時点で減らす
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:'企業名一覧を送信しました'})};
     }
 
@@ -238,7 +234,10 @@ exports.handler=async(event)=>{
       const requestId=`req_${Date.now()}`;
       const createdAt=new Date().toISOString();
       await appendRow(token,'会いたいリクエスト',[requestId,userId||'',targetCompany||'',targetPosition||'','リクエスト受付',createdAt,createdAt,userCompany||'',userName||'',userEmail||'',message||'',matchReason||'','']);
-      return{statusCode:200,headers,body:JSON.stringify({success:true,message:'リクエストを追加しました'})};
+      // 会員のリクエストとして1回減らす（アポが確定しなくても戻らない）
+      let balance=null;
+      if(userId){try{balance=await changeRequestBalance(userId,1,`リクエスト -1社（管理画面で登録：${targetCompany||''}）`);}catch(e){console.error('リクエスト回数の減算エラー:',e.message);}}
+      return{statusCode:200,headers,body:JSON.stringify({success:true,message:'リクエストを追加しました',balance})};
     }
 
     if(action==='list'||action==='getRequests'){
@@ -395,6 +394,9 @@ exports.handler=async(event)=>{
       // 元の行を削除
       const sheetId=await getSheetId(token,'会いたいリクエスト');
       await deleteRow(token,sheetId,rowIndex);
+      // 未処理（リクエスト受付）のまま削除した場合は、誤登録とみなしてリクエスト回数を1回戻す。
+      // 見送り・承認済みなど対応済みのリクエストは、アポの成否にかかわらず戻さない。
+      if(userId&&(status||'リクエスト受付')==='リクエスト受付'){try{await changeRequestBalance(userId,-1,`削除のため回数を戻す +1（${targetCompany||''}）`);}catch(e){console.error('リクエスト回数の戻しエラー:',e.message);}}
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:'ゴミ箱に移動しました'})};
     }
 
@@ -405,6 +407,8 @@ exports.handler=async(event)=>{
       // ゴミ箱から削除
       const sheetId=await getSheetId(token,'ゴミ箱');
       await deleteRow(token,sheetId,rowIndex);
+      // 削除時に回数を戻した未処理リクエストを復元した場合は、もう一度1回減らす
+      if(userId&&(status||'リクエスト受付')==='リクエスト受付'){try{await changeRequestBalance(userId,1,`復元のため -1社（${targetCompany||''}）`);}catch(e){console.error('リクエスト回数の減算エラー:',e.message);}}
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:'復元しました'})};
     }
 
