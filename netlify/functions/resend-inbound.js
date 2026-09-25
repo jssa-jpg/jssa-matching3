@@ -105,6 +105,8 @@ function trimQuotedText(text) {
     /^(From|差出人)\s*[:：]/m,
     /^_{5,}/m,
     /日本スタートアップ支援協会（JSSA）の岡隆宏です。/,
+    /登録された希望条件をもとに、私が相性の良い企業様を選定しました/,
+    /【マッチング企業一覧】/,
   ];
   let cutIndex = text.length;
   for (const re of markers) {
