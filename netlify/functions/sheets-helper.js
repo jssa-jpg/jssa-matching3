@@ -5,6 +5,11 @@ const CACHE_TTL = 5 * 60 * 1000;
 // 会員ランク別の月間紹介上限（岡代表が採択して送信した企業数でカウント）
 const MONTHLY_LIMITS = { 'レギュラーライト': 1, 'レギュラー': 2, 'プライム': 5, 'ライト': 1, '特待生': 2, '投資先': 10, 'default': 3 };
 
+// 日本時間の「年-月」（例：2026-10）。月替わりを日本時間の1日0時にするため
+function _jstYearMonth() {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 7);
+}
+
 // ===== 同じ人物の名刺の判定（異動・昇進で名刺が追加された場合、最新の名刺だけを使う） =====
 function _normCompany(v) { return String(v || '').normalize('NFKC').replace(/株式会社|有限会社|合同会社|一般社団法人|一般財団法人|\(株\)|（株）/g, '').replace(/[\s・,，.．]/g, '').toLowerCase(); }
 function _normName(v) { return String(v || '').normalize('NFKC').replace(/[\s　]/g, ''); }
@@ -185,7 +190,7 @@ async function getMonthlyRequestCount(userId) {
     const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     const sheetId = process.env.GOOGLE_SHEET_ID;
     const token = await getAccessToken(serviceAccount);
-    const yearMonth = new Date().toISOString().slice(0, 7);
+    const yearMonth = _jstYearMonth();
     const res = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/%E6%9C%88%E6%AC%A1%E3%83%AA%E3%82%AF%E3%82%A8%E3%82%B9%E3%83%88%E6%95%B0`,
       { headers: { 'Authorization': `Bearer ${token}` } }
@@ -314,7 +319,7 @@ async function getUserBalance(userId, limit) {
     const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     const sheetId = process.env.GOOGLE_SHEET_ID;
     const token = await getAccessToken(serviceAccount);
-    const yearMonth = new Date().toISOString().slice(0, 7);
+    const yearMonth = _jstYearMonth();
     const cap = limit * 2;
     const rows = await _readBalanceRows(token, sheetId);
     const rowIndex = rows.findIndex(r => r[0] === String(userId));
@@ -346,7 +351,7 @@ async function decrementUserBalance(userId, limit, count) {
     const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     const sheetId = process.env.GOOGLE_SHEET_ID;
     const token = await getAccessToken(serviceAccount);
-    const yearMonth = new Date().toISOString().slice(0, 7);
+    const yearMonth = _jstYearMonth();
     const cap = limit * 2;
     const rows = await _readBalanceRows(token, sheetId);
     const rowIndex = rows.findIndex(r => r[0] === String(userId));
@@ -368,7 +373,7 @@ async function setUserBalance(userId, balance) {
     const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
     const sheetId = process.env.GOOGLE_SHEET_ID;
     const token = await getAccessToken(serviceAccount);
-    const yearMonth = new Date().toISOString().slice(0, 7);
+    const yearMonth = _jstYearMonth();
     const rows = await _readBalanceRows(token, sheetId);
     // setUserBalance は会員コース変更時に新しい月間上限で呼ばれる
     await _writeBalanceRow(token, sheetId, rows, userId, yearMonth, balance, balance, `会員コース変更で残高を${balance}に再設定`);
@@ -467,7 +472,7 @@ async function changeRequestBalance(userId, count, note) {
   const meta = await _userMeta(token, sheetId, userId);
   const limit = MONTHLY_LIMITS[meta.rank] || MONTHLY_LIMITS['default'];
   const cap = limit * 2;
-  const yearMonth = new Date().toISOString().slice(0, 7);
+  const yearMonth = _jstYearMonth();
   const rows = await _readBalanceRows(token, sheetId);
   const rowIndex = rows.findIndex(r => r[0] === String(userId));
   let before = limit;

@@ -20,7 +20,7 @@ async function getAccessToken(){
 
 async function incrementMonthlyCount(userId,token){
   const sheetId=process.env.GOOGLE_SHEET_ID;
-  const yearMonth=new Date().toISOString().slice(0,7);
+  const yearMonth=new Date(Date.now()+9*3600*1000).toISOString().slice(0,7);
   const getRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/月次リクエスト数`,{headers:{'Authorization':`Bearer ${token}`}});
   const getData=await getRes.json();
   const rows=getData.values||[];
