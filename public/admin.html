@@ -388,6 +388,15 @@ function renderEnrichPanel(){
   if(enrichRunning)return;
   document.getElementById('cards-area').innerHTML=`
   <div class="enrich-wrap">
+    <h3>同じ人の古い名刺を整理</h3>
+    <p class="enrich-lead">異動・昇進で同じ人の名刺を追加した場合は、名刺交換日が新しい方（日付が無ければ後から追加した方）を残し、古い名刺の行を削除します。古い名刺にあった企業情報（URL・業種〜企業特徴）は新しい名刺に引き継ぎ、部署・役職・電話・住所は新しい名刺のものを使います。<br>同一人物の判定は「メールアドレスと氏名」（メールが無い場合は「会社名と氏名」）で行います。同じ会社の別の人の名刺は、それぞれ残します。<br>AI情報補完の前に実行してください。</p>
+    <div class="enrich-actions">
+      <button onclick="findDuplicates()">古い名刺を探す</button>
+      <button class="primary" id="dup-merge" onclick="mergeDuplicates()" disabled>古い名刺を削除して整理</button>
+    </div>
+    <div class="enrich-summary" id="dup-summary"></div>
+    <div class="enrich-log" id="dup-log" style="margin-bottom:28px"></div>
+
     <h3>名刺データの企業情報をAIで補完</h3>
     <p class="enrich-lead">「名刺データ」シートで、会社名があり業種（O列）が空の行を探し、AIが業種・企業規模・従業員数・設立年・資本金・上場市場・採用人数・M&amp;A実績・企業特徴（O〜W列）を書き込みます。名刺に住所（G列）やURL（M列）が無い場合は、それも調べて書き込みます（郵便番号がわかればF列にも）。<br>新しく追加した名刺だけを対象にする場合は、追加した行の範囲を指定してください。1社あたり10〜25秒ほどかかります。</p>
     <div class="enrich-range">
@@ -404,6 +413,38 @@ function renderEnrichPanel(){
     <div class="enrich-bar"><div id="enrich-bar"></div></div>
     <div class="enrich-log" id="enrich-log"></div>
   </div>`;
+}
+async function findDuplicates(){
+  const sum=document.getElementById('dup-summary');
+  sum.textContent='名刺データを確認しています…';
+  try{
+    const res=await fetch('/.netlify/functions/collect-company-info',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'findDuplicates'})});
+    const data=await res.json();
+    if(!data.success){sum.textContent='エラー：'+(data.error||'確認できませんでした');return;}
+    const g=data.groups||[];
+    if(!g.length){sum.textContent='同じ人の古い名刺はありません。';document.getElementById('dup-log').innerHTML='';document.getElementById('dup-merge').disabled=true;return;}
+    const n=g.reduce((a,x)=>a+x.remove.length,0);
+    sum.innerHTML=`<b>${g.length}人</b>について、古い名刺が<b>${n}枚</b>見つかりました。内容を確認してから整理してください。`;
+    const line=c=>`${enrichEsc(c.department)} ${enrichEsc(c.position)}<br><span class="enrich-web">${c.row}行目${c.cardDate?'／交換日 '+enrichEsc(c.cardDate):''}</span>`;
+    document.getElementById('dup-log').innerHTML='<table><thead><tr><th>会社名・氏名</th><th>残す（新しい名刺）</th><th>削除する（古い名刺）</th></tr></thead><tbody>'+
+      g.map(x=>`<tr><td>${enrichEsc(x.keep.company)}<br>${enrichEsc(x.keep.name)}</td><td class="enrich-ok">${line(x.keep)}</td><td class="enrich-ng">${x.remove.map(line).join('<hr style="border:0;border-top:1px solid #f3f4f6">')}</td></tr>`).join('')+'</tbody></table>';
+    document.getElementById('dup-merge').disabled=false;
+  }catch(e){sum.textContent='エラー：'+e.message;}
+}
+async function mergeDuplicates(){
+  if(enrichRunning){alert('AI情報補完の実行中は整理できません。');return;}
+  if(!confirm('古い名刺の行を「名刺データ」シートから削除します。よろしいですか？\n（間違えた場合は、スプレッドシートの「変更履歴」から戻せます）'))return;
+  const sum=document.getElementById('dup-summary');
+  document.getElementById('dup-merge').disabled=true;
+  sum.textContent='整理しています…';
+  try{
+    const res=await fetch('/.netlify/functions/collect-company-info',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'mergeDuplicates'})});
+    const data=await res.json();
+    if(!data.success){sum.textContent='エラー：'+(data.error||'整理できませんでした');return;}
+    sum.innerHTML=`整理しました：${data.merged}人分、古い名刺${data.deleted}枚を削除しました（企業情報の引き継ぎ ${data.copied||0}項目）。行番号が変わったので、AI情報補完は「対象の行を探す」からやり直してください。`;
+    document.getElementById('dup-log').innerHTML='';
+    enrichTargets=[];document.getElementById('enrich-start').disabled=true;document.getElementById('enrich-log').innerHTML='';
+  }catch(e){sum.textContent='エラー：'+e.message;}
 }
 async function findEnrichTargets(){
   const sum=document.getElementById('enrich-summary');

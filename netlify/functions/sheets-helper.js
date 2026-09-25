@@ -5,6 +5,29 @@ const CACHE_TTL = 5 * 60 * 1000;
 // 会員ランク別の月間紹介上限（岡代表が採択して送信した企業数でカウント）
 const MONTHLY_LIMITS = { 'レギュラーライト': 1, 'レギュラー': 2, 'プライム': 5, 'ライト': 1, '特待生': 2, '投資先': 10, 'default': 3 };
 
+// ===== 同じ人物の名刺の判定（異動・昇進で名刺が追加された場合、最新の名刺だけを使う） =====
+function _normCompany(v) { return String(v || '').normalize('NFKC').replace(/株式会社|有限会社|合同会社|一般社団法人|一般財団法人|\(株\)|（株）/g, '').replace(/[\s・,，.．]/g, '').toLowerCase(); }
+function _normName(v) { return String(v || '').normalize('NFKC').replace(/[\s　]/g, ''); }
+// メールアドレスと氏名で同一人物を判定（共有アドレス対策で、氏名があれば氏名も一致が条件）。メールが無ければ会社名＋氏名
+function personKey(company, name, email) {
+  const e = String(email || '').trim().toLowerCase();
+  const n = _normName(name);
+  if (e.includes('@')) return n ? `${e}|${n}` : e;
+  if (n) return `${_normCompany(company)}|${n}`;
+  return '';
+}
+// 名刺交換日を比較用の数値にする（読めなければ0）
+function cardTime(v) {
+  const m = String(v || '').normalize('NFKC').match(/(\d{4})\D+(\d{1,2})(?:\D+(\d{1,2}))?/);
+  return m ? Date.UTC(+m[1], +m[2] - 1, +(m[3] || 1)) : 0;
+}
+// 新しい名刺かどうか：名刺交換日が新しい方、同じ／不明なら下の行（後から追加した方）
+function isNewerCard(a, b) {
+  const ta = cardTime(a.cardDate), tb = cardTime(b.cardDate);
+  if (ta && tb && ta !== tb) return ta > tb;
+  return a.cardRow > b.cardRow;
+}
+
 async function getParticipants() {
   const now = Date.now();
   if (cachedData && (now - cacheTime) < CACHE_TTL) return cachedData;
@@ -90,9 +113,21 @@ async function getParticipants() {
     });
   }
 
-  cachedData = participants;
+  // 同じ人物の名刺が複数ある場合は最新の1枚だけ残す（古い部署名・役職名を候補に出さない）。
+  // 同じ会社の別の人物は、それぞれ別の候補として残す。
+  const latest = new Map();
+  const noKey = [];
+  for (const p of participants) {
+    const k = personKey(p.company, p.name, p.email);
+    if (!k) { noKey.push(p); continue; }
+    const cur = latest.get(k);
+    if (!cur || isNewerCard(p, cur)) latest.set(k, p);
+  }
+  const result = [...latest.values(), ...noKey].sort((a, b) => a.cardRow - b.cardRow);
+
+  cachedData = result;
   cacheTime = now;
-  return participants;
+  return result;
 }
 
 function getEmailMap(participants) {
@@ -422,4 +457,4 @@ async function getIntroducedCompanies(userId) {
   }
 }
 
-module.exports = { getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
+module.exports = { personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };

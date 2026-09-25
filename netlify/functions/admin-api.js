@@ -1,4 +1,4 @@
-const{getParticipants,decrementUserBalance,setUserBalance,MONTHLY_LIMITS}=require('./sheets-helper');
+const{getParticipants,decrementUserBalance,setUserBalance,MONTHLY_LIMITS,personKey,isNewerCard}=require('./sheets-helper');
 const RESEND_API_KEY=process.env.RESEND_API_KEY;
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const OFFICE_EMAIL='tok@yumeplanning.jp';
@@ -146,7 +146,20 @@ exports.handler=async(event)=>{
       const cardRows=await getSheet(token,'名刺データ');
       const results=items.map(it=>{
         const rowIdx=it.cardRow;
-        const row=(rowIdx&&rowIdx>1)?cardRows[rowIdx-1]:null;
+        let row=(rowIdx&&rowIdx>1)?cardRows[rowIdx-1]:null;
+        // 重複名刺の整理などで行がずれた場合は、会社名で探し直す
+        const normC=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+        if(row&&it.company&&normC(row[0])!==normC(it.company))row=null;
+        if(!row&&it.company){const hits=cardRows.slice(1).filter(r=>normC(r[0])===normC(it.company));row=hits.length?hits[hits.length-1]:null;}
+        // 同じ人物の新しい名刺（異動・昇進後）があれば、そちらの部署・役職を表示する
+        if(row){
+          const key=personKey(row[0],row[3],row[4]);
+          if(key){
+            let best={values:row,cardRow:cardRows.indexOf(row)+1,cardDate:row[13]};
+            cardRows.forEach((r,i)=>{if(i===0||r===row)return;if(personKey(r[0],r[3],r[4])!==key)return;const c={values:r,cardRow:i+1,cardDate:r[13]};if(isNewerCard(c,best))best=c;});
+            row=best.values;
+          }
+        }
         if(!row){
           return{company:it.company||'',score:it.score||'',found:false,department:'',position:'',name:'',email:'',zip:'',address:'',telOffice:'',telDept:'',telDirect:'',fax:'',mobile:'',siteUrl:'',cardDate:'',industry:'',scale:'',employees:'',founded:'',capital:'',listed:'',hiring:'',ma:'',features:'',facebook:''};
         }

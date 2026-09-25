@@ -1,6 +1,9 @@
 // 名刺データの企業情報（O〜W列）をAIで補完する管理者用の関数
 //  action:'findEmpty' … 会社名があり、O列（業種）が空の行番号を返す
+//  action:'findDuplicates' … 同じ人物の名刺が複数ある組を返す（最新1枚を残し、古い名刺を削除する候補）
+//  action:'mergeDuplicates' … 古い名刺の企業情報を最新の名刺へ引き継いだうえで、古い名刺の行を削除する
 //  action:'enrich'    … 指定行の会社をAIで調べてO〜W列に書き込む（Web検索あり。時間切れ時は知識ベースで再実行）
+const{personKey,isNewerCard}=require('./sheets-helper');
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const ADMIN_PASSWORD=process.env.ADMIN_PASSWORD;
 const SHEET='名刺データ';
@@ -75,6 +78,31 @@ function normalize(info){
   return{industry,scale,employees:s(info.employees).replace(/[^\d]/g,''),founded:s(info.founded),capital:s(info.capital),listed:s(info.listed),hiring:s(info.hiring),ma:s(info.ma),features:s(info.features).slice(0,150),url,postal,address:s(info.address)};
 }
 
+// 同じ人物の名刺の組を作る（最新＝keep、古い名刺＝remove）
+async function buildDuplicateGroups(token,sheetId){
+  const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(SHEET+'!A2:AI')}`,{headers:{'Authorization':`Bearer ${token}`}});
+  const data=await res.json();
+  const rows=data.values||[];
+  const map=new Map();
+  rows.forEach((r,i)=>{
+    const card={row:i+2,cardRow:i+2,company:String(r[0]||'').trim(),department:r[1]||'',position:r[2]||'',name:r[3]||'',email:r[4]||'',cardDate:r[13]||'',values:r};
+    if(!card.company)return;
+    const k=personKey(card.company,card.name,card.email);
+    if(!k)return;
+    if(!map.has(k))map.set(k,[]);
+    map.get(k).push(card);
+  });
+  const groups=[];
+  for(const cards of map.values()){
+    if(cards.length<2)continue;
+    let keep=cards[0];
+    for(const c of cards)if(isNewerCard(c,keep))keep=c;
+    groups.push({keep,remove:cards.filter(c=>c!==keep)});
+  }
+  return groups;
+}
+const brief=c=>({row:c.row,company:c.company,department:c.department,position:c.position,name:c.name,email:c.email,cardDate:c.cardDate});
+
 exports.handler=async(event)=>{
   const headers={'Access-Control-Allow-Origin':'*','Content-Type':'application/json'};
   if(event.httpMethod==='OPTIONS'){return{statusCode:200,headers:{...headers,'Access-Control-Allow-Headers':'Content-Type,Authorization,x-admin-password'},body:''};}
@@ -95,6 +123,40 @@ exports.handler=async(event)=>{
       const from=parseInt(body.fromRow,10)||2,to=parseInt(body.toRow,10)||Infinity;
       rows.forEach((r,i)=>{const n=i+2;if(n<from||n>to)return;if(String(r[0]||'').trim()&&!String(r[14]||'').trim())targets.push({row:n,company:String(r[0]).trim()});});
       return{statusCode:200,headers,body:JSON.stringify({success:true,lastRow:rows.length+1,targets})};
+    }
+
+    if(action==='findDuplicates'){
+      const groups=await buildDuplicateGroups(token,sheetId);
+      return{statusCode:200,headers,body:JSON.stringify({success:true,groups:groups.map(g=>({keep:brief(g.keep),remove:g.remove.map(brief)}))})};
+    }
+
+    if(action==='mergeDuplicates'){
+      const groups=await buildDuplicateGroups(token,sheetId);
+      if(groups.length===0)return{statusCode:200,headers,body:JSON.stringify({success:true,merged:0,deleted:0})};
+      // 1) 最新の名刺で空になっている企業情報（URL＝M列、業種〜企業特徴＝O〜W列）を古い名刺から引き継ぐ
+      //    ※部署・役職・電話・住所など個人や拠点の情報は、古い内容を引き継がない
+      const data2=[];
+      const col=n=>String.fromCharCode(65+n);
+      for(const g of groups){
+        const kv=g.keep.values;
+        const olds=[...g.remove].sort((a,b)=>isNewerCard(a,b)?-1:1);
+        for(const idx of [12,14,15,16,17,18,19,20,21,22]){
+          if(String(kv[idx]||'').trim())continue;
+          const src=olds.find(o=>String(o.values[idx]||'').trim());
+          if(src)data2.push({range:`${SHEET}!${col(idx)}${g.keep.row}`,values:[[src.values[idx]]]});
+        }
+      }
+      if(data2.length){
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data2})});
+      }
+      // 2) 古い名刺の行を下から順に削除（行番号のずれを防ぐ）
+      const meta=await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`,{headers:{'Authorization':`Bearer ${token}`}})).json();
+      const gid=(meta.sheets||[]).map(x=>x.properties).find(p=>p.title===SHEET)?.sheetId;
+      if(gid===undefined)return{statusCode:500,headers,body:JSON.stringify({error:'名刺データシートが見つかりません'})};
+      const delRows=groups.flatMap(g=>g.remove.map(c=>c.row)).sort((a,b)=>b-a);
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+        body:JSON.stringify({requests:delRows.map(r=>({deleteDimension:{range:{sheetId:gid,dimension:'ROWS',startIndex:r-1,endIndex:r}}}))})});
+      return{statusCode:200,headers,body:JSON.stringify({success:true,merged:groups.length,deleted:delRows.length,copied:data2.length})};
     }
 
     const row=parseInt(body.row,10);
