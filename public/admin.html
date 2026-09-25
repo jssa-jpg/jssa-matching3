@@ -270,32 +270,36 @@ function selectAllLoaded(batchId,checked){
   renderCards();
 }
 
+// 10社ずつ表示。AIの処理時間（26秒の上限）に収まるよう、5社ずつ2つのリクエストに分けて同時に読み込む
+const LOAD_COMPANIES=10, CHUNK_COMPANIES=5;
+async function fetchCompanyChunk(batch,groups){
+  const items=groups.flatMap(g=>g.items);
+  const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getCompanyDetails',items:items.map(it=>({company:it.targetCompany,score:it.score,cardRow:it.cardRow})),aiParams:batch.aiParams||{},applicant:{company:batch.userCompany,name:batch.userName,profile:batch.userProfile||{}}})});
+  const text=await res.text();
+  let data;try{data=JSON.parse(text);}catch(e){throw new Error('時間切れ（もう一度押してください）');}
+  if(!data.success)throw new Error(data.error||'取得に失敗しました');
+  return data.companies.map((c,i)=>({...c,rowIndex:items[i].rowIndex,groupKey:coNorm(items[i].targetCompany)}));
+}
 async function loadNextCompanies(batchId){
   const batch=matchBatches.find(b=>b.batchId===batchId);
   if(!batch)return;
   const loaded=loadedDetails[batchId]||[];
   const groups=batchGroups(batch);
   const loadedKeys=new Set(loaded.map(c=>c.groupKey));
-  const nextGroups=groups.filter(g=>!loadedKeys.has(g.key)).slice(0,5);
-  const nextItems=nextGroups.flatMap(g=>g.items);
-  if(nextItems.length===0)return;
-  const remainLabel=()=>loaded.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${groups.length-loadedKeys.size}社）`;
+  const nextGroups=groups.filter(g=>!loadedKeys.has(g.key)).slice(0,LOAD_COMPANIES);
+  if(nextGroups.length===0)return;
+  const remainLabel=()=>loadedKeys.size===0?`詳細を表示（先頭${LOAD_COMPANIES}社）`:`次の${LOAD_COMPANIES}社を表示（残り${groups.length-loadedKeys.size}社）`;
   const btn=document.getElementById(`loadmore-${batchId}`);
   if(btn){btn.disabled=true;btn.textContent='読み込み中…（AIが推薦理由を生成しています）';}
-  try{
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getCompanyDetails',items:nextItems.map(it=>({company:it.targetCompany,score:it.score,cardRow:it.cardRow})),aiParams:batch.aiParams||{},applicant:{company:batch.userCompany,name:batch.userName,profile:batch.userProfile||{}}})});
-    const data=await res.json();
-    if(data.success){
-      const merged=data.companies.map((c,i)=>({...c,rowIndex:nextItems[i].rowIndex,groupKey:coNorm(nextItems[i].targetCompany)}));
-      loadedDetails[batchId]=[...loaded,...merged];
-      renderCards();
-    }else{
-      alert(data.error||'取得に失敗しました');
-      if(btn){btn.disabled=false;btn.textContent=remainLabel();}
-    }
-  }catch(e){
-    alert('エラー: '+e.message);
-    if(btn){btn.disabled=false;btn.textContent=remainLabel();}
+  const chunks=[];for(let k=0;k<nextGroups.length;k+=CHUNK_COMPANIES)chunks.push(nextGroups.slice(k,k+CHUNK_COMPANIES));
+  const results=await Promise.allSettled(chunks.map(ch=>fetchCompanyChunk(batch,ch)));
+  // 読み込めた分は表示する（順番を保つため、失敗したかたまり以降は次回に回す）
+  let merged=[];let failed=null;
+  for(const r of results){if(r.status==='fulfilled'&&!failed)merged=merged.concat(r.value);else if(r.status!=='fulfilled'&&!failed)failed=r.reason;}
+  if(merged.length){loadedDetails[batchId]=[...loaded,...merged];renderCards();}
+  if(failed){
+    alert('一部の企業を読み込めませんでした：'+(failed.message||failed)+'\n「次の'+LOAD_COMPANIES+'社を表示」をもう一度押してください。');
+    if(!merged.length&&btn){btn.disabled=false;btn.textContent=remainLabel();}
   }
 }
 
@@ -600,7 +604,7 @@ function renderCards(){
           </div>
         </div>`;
       }).join('');
-      const loadMoreLabel=loadedGroups.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${totalCount-loadedGroups.length}社）`;
+      const loadMoreLabel=loadedGroups.length===0?`詳細を表示（先頭${LOAD_COMPANIES}社）`:`次の${LOAD_COMPANIES}社を表示（残り${totalCount-loadedGroups.length}社）`;
       const up=b.userProfile;
       let profileHtml;
       if(!up||!up.profileType){
