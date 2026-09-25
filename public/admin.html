@@ -122,6 +122,11 @@ textarea:focus{border-color:#639922}
 .enrich-log th,.enrich-log td{padding:7px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:top}
 .enrich-log th{background:#f9fafb;position:sticky;top:0}
 .enrich-ok{color:#15803d}.enrich-ng{color:#dc2626}.enrich-web{font-size:11px;color:#6b7280}
+.mem-table{width:100%;border-collapse:collapse;font-size:12px;min-width:520px}
+.mem-table th,.mem-table td{padding:6px 8px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:top}
+.mem-table th{background:#f9fafb;font-weight:700;color:#4b5563}
+.mem-row{cursor:pointer}.mem-row:hover td{background:#f9fafb}
+.mem-detail td{background:#f9fafb;color:#4b5563}
 </style>
 </head>
 <body>
@@ -235,13 +240,29 @@ async function loadMatchResults(){
 let selectedCompanies={}; // batchId -> Set(rowIndex)
 let loadedDetails={}; // batchId -> [{rowIndex, company, department, ... , matchReason, recommendation}]
 
-function toggleCompanySelect(batchId,rowIndex,checked){
-  if(!selectedCompanies[batchId])selectedCompanies[batchId]=new Set();
-  if(checked)selectedCompanies[batchId].add(rowIndex);
-  else selectedCompanies[batchId].delete(rowIndex);
-  const el=document.getElementById(`selcount-${batchId}`);
-  if(el)el.textContent=`${selectedCompanies[batchId].size}社を選択中`;
+// ===== 同じ会社の社員（名刺）を1枚のカードにまとめる =====
+let expandedGroups={}; // `${batchId}|${groupKey}` -> 全社員を表示中
+function coNorm(c){return String(c||'').normalize('NFKC').replace(/\s/g,'');}
+function cardTimeF(v){const m=String(v||'').normalize('NFKC').match(/(\d{4})\D+(\d{1,2})(?:\D+(\d{1,2}))?/);if(m)return Date.UTC(+m[1],+m[2]-1,+(m[3]||1));const s=String(v||'').trim();if(/^\d{5}$/.test(s))return Date.UTC(1899,11,30)+parseInt(s,10)*86400000;return 0;}
+function batchGroups(batch){
+  const m=new Map();
+  for(const it of (batch.companies||[])){const k=coNorm(it.targetCompany);if(!m.has(k))m.set(k,{key:k,company:it.targetCompany,items:[]});m.get(k).items.push(it);}
+  return [...m.values()];
 }
+function selectedGroupCount(batchId){
+  const batch=matchBatches.find(b=>b.batchId===batchId);const sel=selectedCompanies[batchId]||new Set();
+  if(!batch)return 0;return batchGroups(batch).filter(g=>g.items.some(it=>sel.has(it.rowIndex))).length;
+}
+function toggleGroupSelect(batchId,groupKey,checked){
+  const batch=matchBatches.find(b=>b.batchId===batchId);if(!batch)return;
+  if(!selectedCompanies[batchId])selectedCompanies[batchId]=new Set();
+  const rows=(batch.companies||[]).filter(it=>coNorm(it.targetCompany)===groupKey).map(it=>it.rowIndex);
+  rows.forEach(r=>checked?selectedCompanies[batchId].add(r):selectedCompanies[batchId].delete(r));
+  const el=document.getElementById(`selcount-${batchId}`);
+  if(el)el.textContent=`${selectedGroupCount(batchId)}社を選択中`;
+}
+function toggleGroupExpand(batchId,groupKey){const k=`${batchId}|${groupKey}`;expandedGroups[k]=!expandedGroups[k];renderCards();}
+function toggleMemberDetail(id){const e=document.getElementById(id);if(e)e.style.display=e.style.display==='none'?'':'none';}
 
 function selectAllLoaded(batchId,checked){
   const loaded=loadedDetails[batchId]||[];
@@ -253,24 +274,28 @@ async function loadNextCompanies(batchId){
   const batch=matchBatches.find(b=>b.batchId===batchId);
   if(!batch)return;
   const loaded=loadedDetails[batchId]||[];
-  const nextItems=batch.companies.slice(loaded.length,loaded.length+5);
+  const groups=batchGroups(batch);
+  const loadedKeys=new Set(loaded.map(c=>c.groupKey));
+  const nextGroups=groups.filter(g=>!loadedKeys.has(g.key)).slice(0,5);
+  const nextItems=nextGroups.flatMap(g=>g.items);
   if(nextItems.length===0)return;
+  const remainLabel=()=>loaded.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${groups.length-loadedKeys.size}社）`;
   const btn=document.getElementById(`loadmore-${batchId}`);
   if(btn){btn.disabled=true;btn.textContent='読み込み中…（AIが推薦理由を生成しています）';}
   try{
     const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getCompanyDetails',items:nextItems.map(it=>({company:it.targetCompany,score:it.score,cardRow:it.cardRow})),aiParams:batch.aiParams||{},applicant:{company:batch.userCompany,name:batch.userName,profile:batch.userProfile||{}}})});
     const data=await res.json();
     if(data.success){
-      const merged=data.companies.map((c,i)=>({...c,rowIndex:nextItems[i].rowIndex}));
+      const merged=data.companies.map((c,i)=>({...c,rowIndex:nextItems[i].rowIndex,groupKey:coNorm(nextItems[i].targetCompany)}));
       loadedDetails[batchId]=[...loaded,...merged];
       renderCards();
     }else{
       alert(data.error||'取得に失敗しました');
-      if(btn){btn.disabled=false;btn.textContent=loaded.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${batch.companies.length-loaded.length}社）`;}
+      if(btn){btn.disabled=false;btn.textContent=remainLabel();}
     }
   }catch(e){
     alert('エラー: '+e.message);
-    if(btn){btn.disabled=false;btn.textContent=loaded.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${batch.companies.length-loaded.length}社）`;}
+    if(btn){btn.disabled=false;btn.textContent=remainLabel();}
   }
 }
 
@@ -305,11 +330,13 @@ async function sendCompanyNames(batch){
   const selSet=selectedCompanies[batch.batchId];
   if(!selSet||selSet.size===0){alert('送信する企業を1社以上選択してください（チェックボックスで採択してください）');return;}
   const loaded=loadedDetails[batch.batchId]||[];
-  const chosenDetailed=loaded.filter(c=>selSet.has(c.rowIndex));
-  if(chosenDetailed.length===0){alert('選択した企業の詳細情報が読み込まれていません。もう一度お試しください。');return;}
+  const chosenRows=loaded.filter(c=>selSet.has(c.rowIndex));
+  if(chosenRows.length===0){alert('選択した企業の詳細情報が読み込まれていません。もう一度お試しください。');return;}
+  // 同じ会社の社員は1社としてまとめる（メールには会社名を1回だけ載せ、その会社の名刺はすべて送信済みにする）
+  const seenCo=new Set();const chosenDetailed=chosenRows.filter(c=>{const k=c.groupKey||coNorm(c.company);if(seenCo.has(k))return false;seenCo.add(k);return true;});
   if(!confirm(`${batch.userName||batch.userCompany}様に、採択した${chosenDetailed.length}社の企業名と推薦理由をメールで送信します。よろしいですか？`))return;
   try{
-    const rowIndexes=chosenDetailed.map(c=>c.rowIndex);
+    const rowIndexes=(batch.companies||[]).filter(it=>seenCo.has(coNorm(it.targetCompany))).map(it=>it.rowIndex);
     const companies=chosenDetailed.map(c=>c.company);
     const companyDetails=chosenDetailed.map(c=>({name:c.company,overview:c.features||'',reason:c.recommendation||''}));
     const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendCompanyNames',batchId:batch.batchId,rowIndexes,userEmail:batch.userEmail,userName:batch.userName,userId:batch.userId,memberRank:batch.memberRank,companies,companyDetails})});
@@ -531,31 +558,49 @@ function renderCards(){
       const statusBadge=b.status==='未通知'?'<span class="badge badge-new">⏳ 未通知</span>':'<span class="badge badge-done">✅ 企業名送信済み</span>';
       const loaded=loadedDetails[b.batchId]||[];
       const selSet=selectedCompanies[b.batchId]||new Set();
-      const totalCount=b.companies.length;
-      const hasMore=loaded.length<totalCount;
-      const detailCards=loaded.map(c=>{
-        const checked=selSet.has(c.rowIndex)?'checked':'';
-        const cid=`cb-${b.batchId}-${c.rowIndex}`;
+      const allGroups=batchGroups(b);
+      const totalCount=allGroups.length;
+      const loadedGroups=[];const gmap=new Map();
+      for(const c of loaded){const k=c.groupKey||coNorm(c.company);if(!gmap.has(k)){gmap.set(k,{key:k,members:[]});loadedGroups.push(gmap.get(k));}gmap.get(k).members.push(c);}
+      const hasMore=loadedGroups.length<totalCount;
+      const tierBadge=t=>t===2?' <span style="background:#FEF3C7;color:#B45309;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">スポンサー</span>':t===1?' <span style="background:#E0E7FF;color:#3730A3;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">協会顧問</span>':'';
+      const detailCards=loadedGroups.map(g=>{
+        // 同じ人物の重複を除き、名刺交換日の新しい順に並べる
+        const seenP=new Set();
+        const members=g.members.filter(m=>{const k=(m.email||'').toLowerCase()+'|'+(m.name||'').replace(/\s/g,'')+'|'+(m.found?'':m.rowIndex);if(seenP.has(k))return false;seenP.add(k);return true;})
+          .sort((a,b2)=>cardTimeF(b2.cardDate)-cardTimeF(a.cardDate));
+        const c=members[0]||g.members[0];
+        const checked=g.members.some(m=>selSet.has(m.rowIndex))?'checked':'';
+        const cid=`cb-${b.batchId}-${g.members[0].rowIndex}`;
+        const score=Math.max(...g.members.map(m=>parseFloat(m.score)||0));
+        const expKey=`${b.batchId}|${g.key}`;
+        const showAll=!!expandedGroups[expKey];
+        const shown=showAll?members:members.slice(0,5);
+        const rowsHtml=shown.map(m=>{
+          const did=`md-${b.batchId}-${m.rowIndex}`;
+          return `<tr class="mem-row" onclick="toggleMemberDetail('${did}')"><td>${m.department||'-'}</td><td>${m.position||'-'}</td><td>${m.name||'-'}</td><td>${formatCardDate(m.cardDate)}</td></tr>
+          <tr id="${did}" class="mem-detail" style="display:none"><td colspan="4"><b>メール:</b> ${m.email||'-'}　<b>電話:</b> ${m.telOffice||m.telDirect||m.mobile||'-'}<br><b>住所:</b> ${(m.zip?m.zip+' ':'')}${m.address||'-'}${!m.found?'<br><span style="color:#991b1b">⚠️ 名刺データが見つかりませんでした（削除・変更された可能性）</span>':''}</td></tr>`;
+        }).join('');
+        const moreBtn=members.length>5?`<button class="sel-btn" style="margin-top:6px" onclick="toggleGroupExpand('${b.batchId}','${g.key.replace(/'/g,"\\'")}')">${showAll?'最新の5名だけ表示':`他${members.length-5}名を表示`}</button>`:'';
         return `<div class="company-card">
           <div class="company-card-head">
-            <input type="checkbox" id="${cid}" ${checked} onchange="toggleCompanySelect('${b.batchId}',${c.rowIndex},this.checked)">
-            <label for="${cid}" class="company-card-name">${c.company||'（企業名不明）'}${c.score?`（マッチ度${c.score}%）`:''}${c.tier===2?' <span style="background:#FEF3C7;color:#B45309;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">スポンサー</span>':c.tier===1?' <span style="background:#E0E7FF;color:#3730A3;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">協会顧問</span>':''}</label>
+            <input type="checkbox" id="${cid}" ${checked} onchange="toggleGroupSelect('${b.batchId}','${g.key.replace(/'/g,"\\'")}',this.checked)">
+            <label for="${cid}" class="company-card-name">${c.company||'（企業名不明）'}${score?`（マッチ度${score}%）`:''}${tierBadge(c.tier)}${members.length>1?` <span style="background:#E6F1FB;color:#0C447C;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">社員${members.length}名</span>`:''}</label>
           </div>
           <div class="company-card-body">
-            <div class="cc-row"><span><b>部署:</b> ${c.department||'-'}</span><span><b>役職:</b> ${c.position||'-'}</span><span><b>担当者名:</b> ${c.name||'-'}</span><span><b>名刺交換日:</b> ${formatCardDate(c.cardDate)}</span></div>
-            <div class="cc-row"><span><b>メール:</b> ${c.email||'-'}</span><span><b>電話:</b> ${c.telOffice||c.telDirect||c.mobile||'-'}</span></div>
-            <div class="cc-row"><span><b>住所:</b> ${(c.zip?c.zip+' ':'')}${c.address||'-'}</span></div>
             <div class="cc-row"><span><b>業種:</b> ${c.industry||'-'}</span><span><b>従業員数:</b> ${c.employees||'-'}</span><span><b>設立:</b> ${c.founded||'-'}</span><span><b>資本金:</b> ${c.capital||'-'}</span><span><b>上場:</b> ${c.listed||'未上場'}</span></div>
             <div class="cc-row"><span><b>サイト:</b> ${c.siteUrl?`<a href="${c.siteUrl}" target="_blank" rel="noopener">${c.siteUrl}</a>`:'-'}</span></div>
             <div style="margin-top:6px"><b>会社概要:</b> ${c.features||'情報なし'}</div>
             ${c.matchReason?`<div style="margin-top:4px"><b>マッチ理由:</b> ${c.matchReason}</div>`:''}
             ${c.meetingBenefit?`<div style="margin-top:4px"><b>面談メリット:</b> ${c.meetingBenefit}</div>`:''}
             ${c.recommendation?`<div class="reason-box">🎯 <b>推薦理由:</b> ${c.recommendation}</div>`:''}
-            ${!c.found?`<div style="color:#991b1b;margin-top:4px">⚠️ 名刺データが見つかりませんでした（削除・変更された可能性）</div>`:''}
+            <div style="font-size:12px;color:#6b7280;margin:10px 0 4px">社員一覧（名刺交換日の新しい順・行をクリックで連絡先を表示）</div>
+            <div style="overflow-x:auto"><table class="mem-table"><thead><tr><th>部署</th><th>役職</th><th>担当者名</th><th>名刺交換日</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+            ${moreBtn}
           </div>
         </div>`;
       }).join('');
-      const loadMoreLabel=loaded.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${totalCount-loaded.length}社）`;
+      const loadMoreLabel=loadedGroups.length===0?'詳細を表示（先頭5社）':`次の5社を表示（残り${totalCount-loadedGroups.length}社）`;
       const up=b.userProfile;
       let profileHtml;
       if(!up||!up.profileType){
@@ -598,7 +643,7 @@ function renderCards(){
             <button class="sel-btn" onclick="selectAllLoaded('${b.batchId}',true)">表示中を全選択</button>
             <button class="sel-btn" onclick="selectAllLoaded('${b.batchId}',false)">全解除</button>
           </div>
-          <div class="sel-count" id="selcount-${b.batchId}">${selSet.size}社を選択中</div>
+          <div class="sel-count" id="selcount-${b.batchId}">${selectedGroupCount(b.batchId)}社を選択中</div>
         </div>`:''}
         <div class="company-detail-list">${detailCards}</div>
         ${hasMore?`<button class="load-more-btn" id="loadmore-${b.batchId}" onclick="loadNextCompanies('${b.batchId}')">${loadMoreLabel}</button>`:''}

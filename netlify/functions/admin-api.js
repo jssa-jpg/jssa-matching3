@@ -186,7 +186,11 @@ exports.handler=async(event)=>{
             appProfile.supportArea?`得意な支援領域：${appProfile.supportArea}`:'',
             appProfile.investmentIndustry?`投資先業種：${appProfile.investmentIndustry}`:''
           ].filter(Boolean).join('／');
-          const list=results.map((r,i)=>`${i+1}. ${r.company}（${r.industry||'業種不明'}・${r.address||'地域不明'}・スコア${r.score}%）\n特徴：${r.features||'情報なし'}`).join('\n\n');
+          // 同じ会社の社員が複数いても、AIには会社ごとに1回だけ依頼する
+          const normCo2=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+          const uniq=[];const idxOf=new Map();
+          results.forEach(r=>{const k=normCo2(r.company);if(!idxOf.has(k)){idxOf.set(k,uniq.length);uniq.push(r);}});
+          const list=uniq.map((r,i)=>`${i+1}. ${r.company}（${r.industry||'業種不明'}・${r.address||'地域不明'}・スコア${r.score}%）\n特徴：${r.features||'情報なし'}`).join('\n\n');
           const prompt=`あなたはJSSAエコシステムマッチングツールのAIアシスタントです。\n以下の企業リストについて、それぞれ次の3つを日本語で生成してください。\n\nアンケート回答：\n- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n${appDetails?`\n申込者の情報：${appDetails}\n`:''}\n企業リスト：\n${list}\n\n① matchReason：マッチ理由（50文字以内）\n② recommendation：推薦理由（150文字以内）\n③ meetingBenefit：この企業（リストの各社）から見て、申込者と面談することのメリット（150文字程度、企業側の立場で前向きになれる具体的な内容）\n\n以下のJSON配列形式のみで回答してください（企業リストと同じ順番・同じ件数で）：\n[{"matchReason":"...","recommendation":"...","meetingBenefit":"..."}]`;
           const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:prompt}]})});
           const aiData=await aiRes.json();
@@ -197,7 +201,7 @@ exports.handler=async(event)=>{
           console.log('AI raw response text:',aiText.slice(0,500));
           const cleanText=aiText.replace(/```json|```/g,'').trim();
           const aiArr=JSON.parse(cleanText);
-          enriched=results.map((r,i)=>({...r,matchReason:(aiArr[i]&&aiArr[i].matchReason)||'',recommendation:(aiArr[i]&&aiArr[i].recommendation)||'',meetingBenefit:(aiArr[i]&&aiArr[i].meetingBenefit)||''}));
+          enriched=results.map(r=>{const a=aiArr[idxOf.get(normCo2(r.company))]||{};return{...r,matchReason:a.matchReason||'',recommendation:a.recommendation||'',meetingBenefit:a.meetingBenefit||''};});
         }catch(e){console.error('AI enrich error:',e.message,e.stack);}
       }
       return{statusCode:200,headers,body:JSON.stringify({success:true,companies:enriched})};

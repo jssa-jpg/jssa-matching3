@@ -261,7 +261,10 @@ scored.sort((a,b)=>(b.score-a.score)
   ||coKey(a.company).localeCompare(coKey(b.company))
   ||((cardTimeByRow.get(b.cardRow)||0)-(cardTimeByRow.get(a.cardRow)||0))
   ||((b.cardRow||0)-(a.cardRow||0)));
-const top100=scored.slice(0,100);
+// 上位100「社」を会社単位で選び、その会社の該当社員（名刺）はすべて保存する
+const topCompanies=new Set();
+for(const m of scored){if(topCompanies.size>=100)break;topCompanies.add(coKey(m.company));}
+const top100=scored.filter(m=>topCompanies.has(coKey(m.company)));
 // ※アプリ2の仕様：マッチング結果はユーザーには非表示。
 // スコア上位の企業をレビュー用シートに保存し、岡代表が管理画面で確認した上で
 // 企業名のみをメールで通知するフローに変更。
@@ -270,6 +273,6 @@ const aiParams={industry,listed,scale,position,region};
 try{
   await saveMatchResultsForReview(userId,ui,top100.map(m=>({company:m.company,score:m.score,cardRow:m.cardRow})),aiParams);
 }catch(e){console.error('saveMatchResultsForReview error:',e.message);}
-return{statusCode:200,headers,body:JSON.stringify({success:true,submitted:true,count:top100.length})};
+return{statusCode:200,headers,body:JSON.stringify({success:true,submitted:true,count:topCompanies.size})};
 }catch(e){return{statusCode:500,headers,body:JSON.stringify({error:e.message,stack:e.stack})};}
 };
