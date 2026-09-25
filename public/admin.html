@@ -541,6 +541,11 @@ function formatCardDate(v){
   return s;
 }
 
+// 保存時刻（UTC）を日本時間の日付「2026-09-25」と時刻「14:05」で表示する
+function jstParts(iso){const d=new Date(iso);if(!iso||isNaN(d))return null;const j=new Date(d.getTime()+9*3600*1000);const p=n=>String(n).padStart(2,'0');return{date:`${j.getUTCFullYear()}-${p(j.getUTCMonth()+1)}-${p(j.getUTCDate())}`,time:`${p(j.getUTCHours())}:${p(j.getUTCMinutes())}`};}
+function jstDate(iso){const x=jstParts(iso);return x?x.date:(iso?String(iso).slice(0,10):'');}
+function jstTime(iso){const x=jstParts(iso);return x?x.time:'--:--';}
+
 function setTab(tab){
   currentTab=tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -638,7 +643,7 @@ function renderCards(){
       }
       return `<div class="card">
         <div class="card-head">
-          <div><div class="card-title">${b.userCompany||'—'} ${b.userName||''}</div><div class="card-sub">${b.userEmail||''} | ${b.createdAt?b.createdAt.slice(0,10):''} | ${totalCount}社マッチ</div></div>
+          <div><div class="card-title">${b.userCompany||'—'} ${b.userName||''}</div><div class="card-sub">${b.userEmail||''} | ${jstDate(b.createdAt)} | ${jstTime(b.createdAt)} | ${totalCount}社マッチ</div></div>
           ${statusBadge}
         </div>
         ${profileHtml}
