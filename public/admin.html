@@ -389,7 +389,7 @@ function renderEnrichPanel(){
   document.getElementById('cards-area').innerHTML=`
   <div class="enrich-wrap">
     <h3>名刺データの企業情報をAIで補完</h3>
-    <p class="enrich-lead">「名刺データ」シートで、会社名があり業種（O列）が空の行を探し、AIが業種・企業規模・従業員数・設立年・資本金・上場市場・採用人数・M&amp;A実績・企業特徴（O〜W列）を書き込みます。<br>新しく追加した名刺だけを対象にする場合は、追加した行の範囲を指定してください。1社あたり10〜25秒ほどかかります。</p>
+    <p class="enrich-lead">「名刺データ」シートで、会社名があり業種（O列）が空の行を探し、AIが業種・企業規模・従業員数・設立年・資本金・上場市場・採用人数・M&amp;A実績・企業特徴（O〜W列）を書き込みます。名刺に住所（G列）やURL（M列）が無い場合は、それも調べて書き込みます（郵便番号がわかればF列にも）。<br>新しく追加した名刺だけを対象にする場合は、追加した行の範囲を指定してください。1社あたり10〜25秒ほどかかります。</p>
     <div class="enrich-range">
       <label>開始行 <input type="number" id="enrich-from" min="2" placeholder="例：11927"></label>
       <label>終了行 <input type="number" id="enrich-to" min="2" placeholder="空欄＝最終行まで"></label>
@@ -447,7 +447,7 @@ async function startEnrich(){
     if(r.success){
       enrichStats.ok++;
       const v=r.info||{};
-      cell.innerHTML=`<span class="enrich-ok">✓ ${enrichEsc(v.industry||'業種不明')}${v.scale?' / '+v.scale:''}</span> <span class="enrich-web">${r.mode==='web'?'Web検索':'AI知識'}</span><br>${enrichEsc(v.features||'')}`;
+      cell.innerHTML=`<span class="enrich-ok">✓ ${enrichEsc(v.industry||'業種不明')}${v.scale?' / '+v.scale:''}</span> <span class="enrich-web">${r.mode==='web'?'Web検索':'AI知識'}${(r.filled&&r.filled.length)?'／'+r.filled.join('・')+'も追加':''}</span><br>${enrichEsc(v.features||'')}`;
     }else{
       enrichStats.ng++;
       cell.innerHTML=`<span class="enrich-ng">✕ ${enrichEsc(r.message||r.error||'失敗')}</span>`;

@@ -24,11 +24,13 @@ async function getAccessToken(){
 
 function buildPrompt(r){
   return `次の会社について調べ、名刺データベース用の企業情報をJSONで回答してください。
-確信の持てない項目は推測で埋めず、空文字にしてください（特に従業員数・資本金・設立年・採用人数・M&A実績）。
+確信の持てない項目は推測で埋めず、空文字にしてください（特に従業員数・資本金・設立年・採用人数・M&A実績・URL・住所）。
+URLと住所は、名刺の会社と同じ会社であることを確認できたものだけを回答してください。
 
 会社名: ${r.company}
 会社URL: ${r.url||'不明'}
 名刺の部署・役職: ${[r.dept,r.position].filter(Boolean).join(' ')||'不明'}
+メールアドレスのドメイン: ${(String(r.email||'').split('@')[1])||'不明'}
 住所: ${r.address||'不明'}
 
 回答形式（JSONのみ。前置きや説明は不要）:
@@ -40,7 +42,10 @@ function buildPrompt(r){
 "listed":"上場市場名（例：東証グロース。未上場は空文字）",
 "hiring":"年間採用人数（例：5名）",
 "ma":"M&A実績（例：2件、実績なし）",
-"features":"事業内容と特徴を100文字程度で"}`;
+"features":"事業内容と特徴を100文字程度で",
+"url":"公式サイトのURL（https://から。実在を確認できたものだけ）",
+"postal":"本社の郵便番号（例：530-0001）",
+"address":"本社所在地（都道府県から番地まで）"}`;
 }
 
 async function askClaude(prompt,useWeb,timeoutMs){
@@ -48,7 +53,7 @@ async function askClaude(prompt,useWeb,timeoutMs){
   const timer=setTimeout(()=>ctrl.abort(),timeoutMs);
   try{
     const body={model:'claude-sonnet-4-6',max_tokens:1200,messages:[{role:'user',content:prompt}]};
-    if(useWeb)body.tools=[{type:'web_search_20250305',name:'web_search',max_uses:2}];
+    if(useWeb)body.tools=[{type:'web_search_20250305',name:'web_search',max_uses:3}];
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl.signal,
       headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},
       body:JSON.stringify(body)});
@@ -65,7 +70,9 @@ function normalize(info){
   const industry=INDUSTRIES.includes(info.industry)?info.industry:(INDUSTRIES.find(x=>info.industry&&(x.includes(info.industry)||info.industry.includes(x.split('・')[0])))||'');
   const scale=['EP','MID','SMB'].includes(String(info.scale||'').trim().toUpperCase())?String(info.scale).trim().toUpperCase():'';
   const s=v=>String(v==null?'':v).trim();
-  return{industry,scale,employees:s(info.employees).replace(/[^\d]/g,''),founded:s(info.founded),capital:s(info.capital),listed:s(info.listed),hiring:s(info.hiring),ma:s(info.ma),features:s(info.features).slice(0,150)};
+  const url=/^https?:\/\/[^\s]+\.[^\s]+/.test(s(info.url))?s(info.url):'';
+  const postal=(s(info.postal).match(/\d{3}-?\d{4}/)||[''])[0].replace(/^(\d{3})(\d{4})$/,'$1-$2');
+  return{industry,scale,employees:s(info.employees).replace(/[^\d]/g,''),founded:s(info.founded),capital:s(info.capital),listed:s(info.listed),hiring:s(info.hiring),ma:s(info.ma),features:s(info.features).slice(0,150),url,postal,address:s(info.address)};
 }
 
 exports.handler=async(event)=>{
@@ -95,7 +102,7 @@ exports.handler=async(event)=>{
     const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`${SHEET}!A${row}:O${row}`)}`,{headers:{'Authorization':`Bearer ${token}`}});
     const data=await res.json();
     const r=data.values?.[0]||[];
-    const rec={company:String(r[0]||'').trim(),dept:r[1]||'',position:r[2]||'',address:r[6]||'',url:r[12]||''};
+    const rec={company:String(r[0]||'').trim(),dept:r[1]||'',position:r[2]||'',address:r[6]||'',url:r[12]||'',email:r[4]||''};
     if(!rec.company)return{statusCode:200,headers,body:JSON.stringify({success:false,row,message:'会社名が空です'})};
     if(String(r[14]||'').trim()&&!body.overwrite)return{statusCode:200,headers,body:JSON.stringify({success:false,row,company:rec.company,message:'補完済みのためスキップ'})};
 
@@ -107,11 +114,18 @@ exports.handler=async(event)=>{
     if(!info){mode='knowledge';info=await askClaude(prompt,false,7000);}
     const v=normalize(info);
 
-    const values=[[v.industry,v.scale,v.employees,v.founded,v.capital,v.listed,v.hiring,v.ma,v.features]];
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`${SHEET}!O${row}:W${row}`)}?valueInputOption=RAW`,{
-      method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values})
+    // O〜W列（業種〜企業特徴）と、名刺に無かった場合だけ F列（郵便番号）・G列（住所）・M列（URL）を書き込む
+    const data2=[{range:`${SHEET}!O${row}:W${row}`,values:[[v.industry,v.scale,v.employees,v.founded,v.capital,v.listed,v.hiring,v.ma,v.features]]}];
+    const filled=[];
+    if(!String(r[6]||'').trim()&&v.address){
+      data2.push({range:`${SHEET}!G${row}`,values:[[v.address]]});filled.push('住所');
+      if(!String(r[5]||'').trim()&&v.postal)data2.push({range:`${SHEET}!F${row}`,values:[[v.postal]]});
+    }
+    if(!String(r[12]||'').trim()&&v.url){data2.push({range:`${SHEET}!M${row}`,values:[[v.url]]});filled.push('URL');}
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,{
+      method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data2})
     });
-    return{statusCode:200,headers,body:JSON.stringify({success:true,row,company:rec.company,mode,info:v})};
+    return{statusCode:200,headers,body:JSON.stringify({success:true,row,company:rec.company,mode,info:v,filled})};
   }catch(e){
     return{statusCode:500,headers,body:JSON.stringify({error:e.message})};
   }
