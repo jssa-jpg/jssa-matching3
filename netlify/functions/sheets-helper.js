@@ -489,7 +489,7 @@ async function changeRequestBalance(userId, count, note) {
 let _priorityCache = null, _priorityCacheTime = 0;
 function _priorityNorm(v) {
   return String(v || '').normalize('NFKC').replace(/證/g, '証')
-    .replace(/株式会社|有限会社|合同会社|有限責任|一般社団法人|一般財団法人|公益社団法人|公益財団法人|\(株\)|（株）/g, '')
+    .replace(/株式会社|有限会社|合同会社|有限責任|一般社団法人|一般財団法人|公益社団法人|公益財団法人|弁護士法人|税理士法人|司法書士法人|社会保険労務士法人|\(株\)|（株）/g, '')
     .replace(/[\s・,，.．&＆'’\-ー]/g, '').toLowerCase();
 }
 function _priorityKey(name) {
@@ -519,7 +519,10 @@ async function getPriorityLists() {
 function priorityTier(company, lists) {
   const c = _priorityNorm(company);
   if (!c || !lists) return 0;
-  const hit = keys => keys.some(k => (k.length <= 3 ? c === k : c.includes(k)));
+  // 社名が一致するものだけを該当とする。後ろに付くのは「グループ」「ホールディングス」や「神戸事務所」「大阪支店」などの拠点名のみ許可
+  // （「ケンブリッジ…」が「ブリッジコンサル」に、「ユナイテッドアローズ」が「ユナイテッド」に一致するような誤判定を防ぐ）
+  const okRest = r => r === '' || /^(グルプ|ホルディングス|hd|holdings|group)$/.test(r) || /^.{0,8}(事務所|支店|支社|本店|本社|営業所)$/.test(r);
+  const hit = keys => keys.some(k => c === k || (k.length > 3 && c.startsWith(k) && okRest(c.slice(k.length))));
   if (hit(lists.sponsors)) return 2;
   if (hit(lists.advisors)) return 1;
   return 0;
