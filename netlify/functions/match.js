@@ -1,4 +1,4 @@
-const{getParticipants,getIntroducedCompanies,saveMatchResultsForReview}=require('./sheets-helper');
+const{getParticipants,getIntroducedCompanies,saveMatchResultsForReview,cardTime}=require('./sheets-helper');
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const rateLimit=new Map();
 function checkRateLimit(ip){const now=Date.now();const entry=rateLimit.get(ip)||{count:0,reset:now+60000};if(now>entry.reset){entry.count=0;entry.reset=now+60000;}entry.count++;rateLimit.set(ip,entry);return entry.count<=30;}
@@ -246,7 +246,16 @@ if(region.length>0&&pf){for(let j=0;j<region.length;j++){const r=region[j];if(!r
 const pct=Math.min(Math.round((s/150)*100),99);
 scored.push({id:p.id||"",cardRow:p.cardRow||0,company:p.company||"",department:p.department||"",position:pp,industry:pi,scale:ps,prefecture:pf,listed:p.listed||"",employees:p.employees||"",founded:p.founded||"",capital:p.capital||"",hiring:p.hiring||"",ma:pm,features:p.features||"",siteUrl:p.siteUrl||"",score:pct,matchReason:"",recommendation:"",firstMessage:""});
 }
-scored.sort((a,b)=>b.score-a.score);
+// マッチ度が同じ場合は、名刺交換日が一番新しい社員がいる会社を優先。同じ会社のメンバーはまとめて並べ、その中は名刺交換日の新しい順
+const coKey=c=>String(c||'').normalize('NFKC').replace(/\s/g,'');
+const companyLatest=new Map();
+for(const p of all){if(!p||!p.company)continue;const k=coKey(p.company);const t=cardTime(p.cardDate);if(t>(companyLatest.get(k)||0))companyLatest.set(k,t);}
+const cardTimeByRow=new Map(all.map(p=>[p.cardRow,cardTime(p.cardDate)]));
+scored.sort((a,b)=>(b.score-a.score)
+  ||((companyLatest.get(coKey(b.company))||0)-(companyLatest.get(coKey(a.company))||0))
+  ||coKey(a.company).localeCompare(coKey(b.company))
+  ||((cardTimeByRow.get(b.cardRow)||0)-(cardTimeByRow.get(a.cardRow)||0))
+  ||((b.cardRow||0)-(a.cardRow||0)));
 const top100=scored.slice(0,100);
 // ※アプリ2の仕様：マッチング結果はユーザーには非表示。
 // スコア上位の企業をレビュー用シートに保存し、岡代表が管理画面で確認した上で
