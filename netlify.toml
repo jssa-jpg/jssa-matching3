@@ -24,3 +24,6 @@
 
 [functions."resend-inbound"]
   timeout = 26
+
+[functions."collect-company-info"]
+  timeout = 26

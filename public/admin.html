@@ -102,6 +102,26 @@ textarea:focus{border-color:#639922}
 .btn-send:disabled{background:#9ca3af;cursor:not-allowed}
 .btn-cancel{flex:1;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:13px;color:#6b7280;cursor:pointer}
 .trash-note{background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:16px}
+/* AI情報補完 */
+.tab-enrich{border-color:#c7d2fe}
+.enrich-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:24px}
+.enrich-wrap h3{font-size:17px;margin:0 0 6px}
+.enrich-lead{font-size:13px;color:#4b5563;line-height:1.8;margin:0 0 18px}
+.enrich-range{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;margin-bottom:14px}
+.enrich-range input[type=number]{width:110px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}
+.enrich-range label{display:flex;gap:6px;align-items:center}
+.enrich-actions{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.enrich-actions button{padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid #d1d5db;background:#fff}
+.enrich-actions .primary{background:#639922;color:#fff;border-color:#639922}
+.enrich-actions button:disabled{opacity:.5;cursor:not-allowed}
+.enrich-summary{font-size:14px;margin-bottom:10px}
+.enrich-bar{height:10px;background:#f3f4f6;border-radius:6px;overflow:hidden;margin-bottom:14px}
+.enrich-bar>div{height:100%;width:0;background:#639922;transition:width .3s}
+.enrich-log{max-height:420px;overflow:auto;border:1px solid #f3f4f6;border-radius:8px}
+.enrich-log table{width:100%;border-collapse:collapse;font-size:12px}
+.enrich-log th,.enrich-log td{padding:7px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:top}
+.enrich-log th{background:#f9fafb;position:sticky;top:0}
+.enrich-ok{color:#15803d}.enrich-ng{color:#dc2626}.enrich-web{font-size:11px;color:#6b7280}
 </style>
 </head>
 <body>
@@ -136,7 +156,8 @@ textarea:focus{border-color:#639922}
       <button class="tab" onclick="setTab('done')">承認済み</button>
       <button class="tab" onclick="setTab('ng')">却下</button>
       <button class="tab tab-trash" onclick="setTab('trash')">🗑 ゴミ箱</button>
-      <button class="btn-refresh" onclick="currentTab==='matches'?loadMatchResults():loadRequests()">🔄 更新</button>
+      <button class="tab tab-enrich" onclick="setTab('enrich')">🤖 AI情報補完</button>
+      <button class="btn-refresh" onclick="currentTab==='enrich'?renderEnrichPanel():currentTab==='matches'?loadMatchResults():loadRequests()">🔄 更新</button>
     </div>
     <div id="detail-area"></div>
     <div id="cards-area"><div class="empty">読み込み中...</div></div>
@@ -360,18 +381,98 @@ function updateStats(){
   document.getElementById('stat-ng').textContent=ng;
 }
 
+// ===== AI情報補完：名刺データのO〜W列（業種〜企業特徴）が空の行をAIで埋める =====
+let enrichTargets=[],enrichRunning=false,enrichStop=false,enrichStats={ok:0,ng:0};
+function enrichEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function renderEnrichPanel(){
+  if(enrichRunning)return;
+  document.getElementById('cards-area').innerHTML=`
+  <div class="enrich-wrap">
+    <h3>名刺データの企業情報をAIで補完</h3>
+    <p class="enrich-lead">「名刺データ」シートで、会社名があり業種（O列）が空の行を探し、AIが業種・企業規模・従業員数・設立年・資本金・上場市場・採用人数・M&amp;A実績・企業特徴（O〜W列）を書き込みます。<br>新しく追加した名刺だけを対象にする場合は、追加した行の範囲を指定してください。1社あたり10〜25秒ほどかかります。</p>
+    <div class="enrich-range">
+      <label>開始行 <input type="number" id="enrich-from" min="2" placeholder="例：11927"></label>
+      <label>終了行 <input type="number" id="enrich-to" min="2" placeholder="空欄＝最終行まで"></label>
+      <label><input type="checkbox" id="enrich-web" checked> Web検索で調べる（精度が上がります）</label>
+    </div>
+    <div class="enrich-actions">
+      <button onclick="findEnrichTargets()">対象の行を探す</button>
+      <button class="primary" id="enrich-start" onclick="startEnrich()" disabled>補完を開始</button>
+      <button id="enrich-stop" onclick="enrichStop=true" disabled>停止</button>
+    </div>
+    <div class="enrich-summary" id="enrich-summary">まず「対象の行を探す」を押してください。</div>
+    <div class="enrich-bar"><div id="enrich-bar"></div></div>
+    <div class="enrich-log" id="enrich-log"></div>
+  </div>`;
+}
+async function findEnrichTargets(){
+  const sum=document.getElementById('enrich-summary');
+  sum.textContent='名刺データを確認しています…';
+  try{
+    const res=await fetch('/.netlify/functions/collect-company-info',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},
+      body:JSON.stringify({action:'findEmpty',fromRow:document.getElementById('enrich-from').value,toRow:document.getElementById('enrich-to').value})});
+    const data=await res.json();
+    if(!data.success){sum.textContent='エラー：'+(data.error||'確認できませんでした');return;}
+    enrichTargets=data.targets||[];
+    if(enrichTargets.length===0){sum.innerHTML=`補完が必要な行はありません（名刺データの最終行：${data.lastRow}行目）。`;document.getElementById('enrich-start').disabled=true;return;}
+    const first=enrichTargets[0].row,last=enrichTargets[enrichTargets.length-1].row;
+    sum.innerHTML=`<b>${enrichTargets.length}社</b>が対象です（${first}行目〜${last}行目、名刺データの最終行：${data.lastRow}行目）。${enrichTargets.length>150?'<br><span class="enrich-ng">件数が多いため、既存の古い行が含まれている可能性があります。開始行を指定して絞り込んでください。</span>':''}`;
+    document.getElementById('enrich-log').innerHTML='<table><thead><tr><th>行</th><th>会社名</th><th>結果</th></tr></thead><tbody>'+
+      enrichTargets.map(t=>`<tr id="enrich-row-${t.row}"><td>${t.row}</td><td>${enrichEsc(t.company)}</td><td>待機中</td></tr>`).join('')+'</tbody></table>';
+    document.getElementById('enrich-start').disabled=false;
+  }catch(e){sum.textContent='エラー：'+e.message;}
+}
+async function enrichOne(row,useWeb){
+  const res=await fetch('/.netlify/functions/collect-company-info',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'enrich',row,useWeb})});
+  const text=await res.text();
+  try{return JSON.parse(text);}catch(e){return{success:false,error:'時間切れ'};}
+}
+async function startEnrich(){
+  if(!enrichTargets.length)return;
+  if(!confirm(`${enrichTargets.length}社の企業情報をAIで補完します。よろしいですか？`))return;
+  enrichRunning=true;enrichStop=false;enrichStats={ok:0,ng:0};
+  clearAutoRefresh&&clearAutoRefresh();
+  document.getElementById('enrich-start').disabled=true;
+  document.getElementById('enrich-stop').disabled=false;
+  const useWeb=document.getElementById('enrich-web').checked;
+  const sum=document.getElementById('enrich-summary');
+  for(let i=0;i<enrichTargets.length;i++){
+    if(enrichStop)break;
+    const t=enrichTargets[i];
+    const cell=document.querySelector(`#enrich-row-${t.row} td:last-child`);
+    cell.textContent='調査中…';
+    sum.innerHTML=`${i+1} / ${enrichTargets.length}社目を調査中：${enrichEsc(t.company)}`;
+    let r=await enrichOne(t.row,useWeb);
+    if(!r.success&&useWeb&&r.error)r=await enrichOne(t.row,false); // 時間切れなどはWeb検索なしで再実行
+    if(r.success){
+      enrichStats.ok++;
+      const v=r.info||{};
+      cell.innerHTML=`<span class="enrich-ok">✓ ${enrichEsc(v.industry||'業種不明')}${v.scale?' / '+v.scale:''}</span> <span class="enrich-web">${r.mode==='web'?'Web検索':'AI知識'}</span><br>${enrichEsc(v.features||'')}`;
+    }else{
+      enrichStats.ng++;
+      cell.innerHTML=`<span class="enrich-ng">✕ ${enrichEsc(r.message||r.error||'失敗')}</span>`;
+    }
+    document.getElementById('enrich-bar').style.width=((i+1)/enrichTargets.length*100)+'%';
+  }
+  enrichRunning=false;
+  document.getElementById('enrich-stop').disabled=true;
+  sum.innerHTML=`${enrichStop?'停止しました':'完了しました'}：成功 <b>${enrichStats.ok}社</b>／失敗 ${enrichStats.ng}社。失敗した行は、もう一度「対象の行を探す」から再実行できます。<br>内容はスプレッドシートの「名刺データ」O〜W列で確認・修正できます。`;
+}
+
 function setTab(tab){
   currentTab=tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(typeof event!=='undefined'&&event.target)event.target.classList.add('active');
   document.getElementById('detail-area').innerHTML='';
   isDetailOpen=false;
+  if(tab==='enrich'){renderEnrichPanel();return;}
   if(tab==='trash'){loadTrash();}
   else if(tab==='matches'){loadMatchResults();}
   else{renderCards();}
 }
 
 function renderCards(){
+  if(currentTab==='enrich')return; // AI情報補完の実行中に画面が書き換わらないようにする
   const area=document.getElementById('cards-area');
   if(currentTab==='matches'){
     if(matchBatches.length===0){area.innerHTML='<div class="empty">マッチング結果はまだありません</div>';return;}
