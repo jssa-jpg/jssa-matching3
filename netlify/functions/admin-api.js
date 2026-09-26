@@ -141,6 +141,28 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({success:true,batches:list})};
     }
 
+    if(action==='searchBatch'){
+      // マッチング結果（最大100社）の中から、会社名・部署・会社概要にキーワードを含む会社を探す
+      // キーワードはスペース区切りで複数指定でき、どれか1つを含めば該当（OR検索）
+      const{items,keywords}=body;
+      const kws=(Array.isArray(keywords)?keywords:[]).map(k=>String(k||'').normalize('NFKC').trim().toLowerCase()).filter(Boolean);
+      if(!Array.isArray(items)||!kws.length)return{statusCode:400,headers,body:JSON.stringify({error:'検索キーワードを入力してください'})};
+      const cardRows=await getSheet(token,'名刺データ');
+      const normC=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+      const byCompany=new Map();
+      cardRows.slice(1).forEach(r=>{const k=normC(r[0]);if(!k)return;if(!byCompany.has(k))byCompany.set(k,[]);byCompany.get(k).push(r);});
+      const hitRows=[];
+      for(const it of items){
+        const k=normC(it.company);
+        let rows=byCompany.get(k)||[];
+        const direct=(it.cardRow&&it.cardRow>1)?cardRows[it.cardRow-1]:null;
+        if(direct&&normC(direct[0])===k)rows=[direct,...rows];
+        const text=[it.company,...rows.flatMap(r=>[r[1],r[22]])].map(v=>String(v||'')).join(' ').normalize('NFKC').toLowerCase();
+        if(kws.some(kw=>text.includes(kw)))hitRows.push(it.rowIndex);
+      }
+      return{statusCode:200,headers,body:JSON.stringify({success:true,rowIndexes:hitRows})};
+    }
+
     if(action==='excludeCompanies'){
       // マッチング結果から、ふさわしくない企業を候補から外す（行は消さずにステータスを「除外」にする）
       const{rowIndexes}=body;

@@ -249,6 +249,25 @@ function batchGroups(batch){
   for(const it of (batch.companies||[])){const k=coNorm(it.targetCompany);if(!m.has(k))m.set(k,{key:k,company:it.targetCompany,items:[]});m.get(k).items.push(it);}
   return [...m.values()];
 }
+let batchFilters={}; // batchId -> {query, rows:Set(rowIndex)}
+function visibleGroups(batch){
+  const f=batchFilters[batch.batchId];const gs=batchGroups(batch);
+  return f?gs.filter(g=>g.items.some(it=>f.rows.has(it.rowIndex))):gs;
+}
+async function searchBatch(batchId){
+  const batch=matchBatches.find(b=>b.batchId===batchId);if(!batch)return;
+  const input=document.getElementById(`search-${batchId}`);const q=(input?input.value:'').trim();
+  if(!q){clearBatchSearch(batchId);return;}
+  const btn=document.getElementById(`searchbtn-${batchId}`);if(btn){btn.disabled=true;btn.textContent='検索中…';}
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'searchBatch',keywords:q.split(/[\s　]+/),items:(batch.companies||[]).map(it=>({rowIndex:it.rowIndex,company:it.targetCompany,cardRow:it.cardRow}))})});
+    const data=await res.json();
+    if(!data.success){alert(data.error||'検索に失敗しました');}
+    else{batchFilters[batchId]={query:q,rows:new Set(data.rowIndexes)};}
+  }catch(e){alert('エラー: '+e.message);}
+  renderCards();
+}
+function clearBatchSearch(batchId){delete batchFilters[batchId];renderCards();}
 function selectedGroupCount(batchId){
   const batch=matchBatches.find(b=>b.batchId===batchId);const sel=selectedCompanies[batchId]||new Set();
   if(!batch)return 0;return batchGroups(batch).filter(g=>g.items.some(it=>sel.has(it.rowIndex))).length;
@@ -281,8 +300,13 @@ function toggleGroupExpand(batchId,groupKey){const k=`${batchId}|${groupKey}`;ex
 function toggleMemberDetail(id){const e=document.getElementById(id);if(e)e.style.display=e.style.display==='none'?'':'none';}
 
 function selectAllLoaded(batchId,checked){
+  // 表示中（検索で絞り込んでいる場合は該当分）の会社だけを選択・解除する
+  const batch=matchBatches.find(b=>b.batchId===batchId);
   const loaded=loadedDetails[batchId]||[];
-  selectedCompanies[batchId]=new Set(checked?loaded.map(c=>c.rowIndex):[]);
+  const visKeys=new Set(batch?visibleGroups(batch).map(g=>g.key):[]);
+  const rows=loaded.filter(c=>visKeys.has(c.groupKey||coNorm(c.company))).map(c=>c.rowIndex);
+  if(!selectedCompanies[batchId])selectedCompanies[batchId]=new Set();
+  rows.forEach(r=>checked?selectedCompanies[batchId].add(r):selectedCompanies[batchId].delete(r));
   renderCards();
 }
 
@@ -300,11 +324,11 @@ async function loadNextCompanies(batchId){
   const batch=matchBatches.find(b=>b.batchId===batchId);
   if(!batch)return;
   const loaded=loadedDetails[batchId]||[];
-  const groups=batchGroups(batch);
+  const groups=visibleGroups(batch);
   const loadedKeys=new Set(loaded.map(c=>c.groupKey));
   const nextGroups=groups.filter(g=>!loadedKeys.has(g.key)).slice(0,LOAD_COMPANIES);
   if(nextGroups.length===0)return;
-  const remainLabel=()=>loadedKeys.size===0?`詳細を表示（先頭${LOAD_COMPANIES}社）`:`次の${LOAD_COMPANIES}社を表示（残り${groups.length-loadedKeys.size}社）`;
+  const remainLabel=()=>{const n=groups.filter(g=>loadedKeys.has(g.key)).length;return n===0?`詳細を表示（先頭${LOAD_COMPANIES}社）`:`次の${LOAD_COMPANIES}社を表示（残り${groups.length-n}社）`;};
   const btn=document.getElementById(`loadmore-${batchId}`);
   if(btn){btn.disabled=true;btn.textContent='読み込み中…（AIが推薦理由を生成しています）';}
   const chunks=[];for(let k=0;k<nextGroups.length;k+=CHUNK_COMPANIES)chunks.push(nextGroups.slice(k,k+CHUNK_COMPANIES));
@@ -585,9 +609,19 @@ function renderCards(){
       const selSet=selectedCompanies[b.batchId]||new Set();
       const allGroups=batchGroups(b);
       const totalCount=allGroups.length;
-      const loadedGroups=[];const gmap=new Map();
-      for(const c of loaded){const k=c.groupKey||coNorm(c.company);if(!gmap.has(k)){gmap.set(k,{key:k,members:[]});loadedGroups.push(gmap.get(k));}gmap.get(k).members.push(c);}
-      const hasMore=loadedGroups.length<totalCount;
+      const gmap=new Map();
+      for(const c of loaded){const k=c.groupKey||coNorm(c.company);if(!gmap.has(k))gmap.set(k,{key:k,members:[]});gmap.get(k).members.push(c);}
+      const filt=batchFilters[b.batchId];
+      const visGroups=visibleGroups(b);
+      const loadedGroups=visGroups.filter(g=>gmap.has(g.key)).map(g=>gmap.get(g.key));
+      const hasMore=loadedGroups.length<visGroups.length;
+      const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+      const searchHtml=`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0">
+          <input id="search-${b.batchId}" type="text" value="${esc(filt?filt.query:'')}" placeholder="候補の中を検索（例：自治体　市役所 県庁）" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px" onkeydown="if(event.key==='Enter')searchBatch('${b.batchId}')">
+          <button class="sel-btn" id="searchbtn-${b.batchId}" onclick="searchBatch('${b.batchId}')">検索</button>
+          ${filt?`<button class="sel-btn" onclick="clearBatchSearch('${b.batchId}')">検索を解除</button>`:''}
+          ${filt?`<span style="font-size:12px;color:#4b5563">「${esc(filt.query)}」に該当：${visGroups.length}社（全${totalCount}社中）</span>`:''}
+        </div>`;
       const tierBadge=t=>t===2?' <span style="background:#FEF3C7;color:#B45309;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">スポンサー</span>':t===1?' <span style="background:#E0E7FF;color:#3730A3;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">協会顧問</span>':'';
       const detailCards=loadedGroups.map(g=>{
         // 同じ人物の重複を除き、名刺交換日の新しい順に並べる
@@ -626,7 +660,7 @@ function renderCards(){
           </div>
         </div>`;
       }).join('');
-      const loadMoreLabel=loadedGroups.length===0?`詳細を表示（先頭${LOAD_COMPANIES}社）`:`次の${LOAD_COMPANIES}社を表示（残り${totalCount-loadedGroups.length}社）`;
+      const loadMoreLabel=loadedGroups.length===0?`詳細を表示（先頭${LOAD_COMPANIES}社）`:`次の${LOAD_COMPANIES}社を表示（残り${visGroups.length-loadedGroups.length}社）`;
       const up=b.userProfile;
       let profileHtml;
       if(!up||!up.profileType){
@@ -675,7 +709,9 @@ function renderCards(){
         </div>
         ${profileHtml}
         ${surveyHtml}
-        ${loaded.length>0?`<div class="select-toolbar">
+        ${searchHtml}
+        ${filt&&visGroups.length===0?'<div class="empty" style="padding:16px">該当する会社がありません。別のキーワードでお試しください。</div>':''}
+        ${loadedGroups.length>0?`<div class="select-toolbar">
           <div class="sel-btns">
             <button class="sel-btn" onclick="selectAllLoaded('${b.batchId}',true)">表示中を全選択</button>
             <button class="sel-btn" onclick="selectAllLoaded('${b.batchId}',false)">全解除</button>
