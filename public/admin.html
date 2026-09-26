@@ -262,7 +262,7 @@ async function searchBatch(batchId){
   if(!q){clearBatchSearch(batchId);return;}
   const btn=document.getElementById(`searchbtn-${batchId}`);if(btn){btn.disabled=true;btn.textContent='検索中…';}
   try{
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'searchBatch',keywords:q.split(/[\s　]+/),items:(batch.companies||[]).map(it=>({rowIndex:it.rowIndex,company:it.targetCompany,cardRow:it.cardRow}))})});
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'searchBatch',keywords:q.split(/[\s　、，,・／/]+/),items:(batch.companies||[]).map(it=>({rowIndex:it.rowIndex,company:it.targetCompany,cardRow:it.cardRow}))})});
     const data=await res.json();
     if(!data.success){alert(data.error||'検索に失敗しました');}
     else{batchFilters[batchId]={query:q,rows:new Set(data.rowIndexes)};}
@@ -279,7 +279,7 @@ async function searchAllCards(batchId){
   if(!q){alert('検索キーワードを入力してください');return;}
   const btn=document.getElementById(`searchallbtn-${batchId}`);if(btn){btn.disabled=true;btn.textContent='検索中…';}
   try{
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'searchAllCards',keywords:q.split(/[\s　]+/),userId:batch.userId,batchId})});
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'searchAllCards',keywords:q.split(/[\s　、，,・／/]+/),userId:batch.userId,batchId})});
     const data=await res.json();
     if(!data.success)alert(data.error||'検索に失敗しました');
     else allSearch[batchId]={query:q,total:data.total,companies:data.companies,selected:new Set()};
@@ -724,7 +724,7 @@ function renderCards(){
           <div style="display:flex;gap:8px;margin-top:8px"><button class="btn-approve" id="addpicked-${b.batchId}" onclick="addPickedToBatch('${b.batchId}')">選んだ会社を候補に追加</button><button class="sel-btn" onclick="delete allSearch['${b.batchId}'];renderCards()">閉じる</button></div>`:'<div style="font-size:12px;color:#6b7280">該当する会社がありません。</div>'}
         </div>`:'';
       const searchHtml=`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0">
-          <input id="search-${b.batchId}" type="text" value="${esc(filt?filt.query:'')}" placeholder="キーワード（例：市役所 県庁 町役場）" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px" onkeydown="if(event.key==='Enter')searchBatch('${b.batchId}')">
+          <input id="search-${b.batchId}" type="text" value="${esc(filt?filt.query:'')}" placeholder="キーワード（例：市役所 県庁 福岡、沖縄）※スペースや「、」で区切ると、どれか1つを含む会社を表示" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px" onkeydown="if(event.key==='Enter')searchBatch('${b.batchId}')">
           <button class="sel-btn" id="searchbtn-${b.batchId}" onclick="searchBatch('${b.batchId}')">候補の中を検索</button>
           <button class="sel-btn" id="searchallbtn-${b.batchId}" onclick="searchAllCards('${b.batchId}')">名刺データ全体から検索</button>
           ${filt?`<button class="sel-btn" onclick="clearBatchSearch('${b.batchId}')">検索を解除</button>`:''}

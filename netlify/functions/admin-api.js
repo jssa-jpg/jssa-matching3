@@ -143,7 +143,7 @@ exports.handler=async(event)=>{
     }
 
     if(action==='searchBatch'){
-      // マッチング結果（最大100社）の中から、会社名・部署・会社概要にキーワードを含む会社を探す
+      // マッチング結果（最大100社）の中から、会社名・部署・住所・会社概要にキーワードを含む会社を探す
       // キーワードはスペース区切りで複数指定でき、どれか1つを含めば該当（OR検索）
       const{items,keywords}=body;
       const kws=(Array.isArray(keywords)?keywords:[]).map(k=>String(k||'').normalize('NFKC').trim().toLowerCase()).filter(Boolean);
@@ -158,7 +158,7 @@ exports.handler=async(event)=>{
         let rows=byCompany.get(k)||[];
         const direct=(it.cardRow&&it.cardRow>1)?cardRows[it.cardRow-1]:null;
         if(direct&&normC(direct[0])===k)rows=[direct,...rows];
-        const text=[it.company,...rows.flatMap(r=>[r[1],r[22]])].map(v=>String(v||'')).join(' ').normalize('NFKC').toLowerCase();
+        const text=[it.company,...rows.flatMap(r=>[r[1],r[6],r[22]])].map(v=>String(v||'')).join(' ').normalize('NFKC').toLowerCase();
         if(kws.some(kw=>text.includes(kw)))hitRows.push(it.rowIndex);
       }
       return{statusCode:200,headers,body:JSON.stringify({success:true,rowIndexes:hitRows})};
@@ -179,7 +179,7 @@ exports.handler=async(event)=>{
       const groups=new Map();
       for(const p of participants){
         const k=normC(p.company);if(!k||skip.has(k))continue;
-        const text=[p.company,p.department,p.features].map(v=>String(v||'')).join(' ').normalize('NFKC').toLowerCase();
+        const text=[p.company,p.department,p.address,p.features].map(v=>String(v||'')).join(' ').normalize('NFKC').toLowerCase();
         if(!kws.some(kw=>text.includes(kw)))continue;
         if(!groups.has(k))groups.set(k,{company:p.company,industry:p.industry||'',prefecture:p.prefecture||'',features:p.features||'',members:[],latest:0});
         const g=groups.get(k);g.members.push({department:p.department||'',position:p.position||'',name:p.name||''});g.latest=Math.max(g.latest,cardTime(p.cardDate));
