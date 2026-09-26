@@ -217,18 +217,21 @@ if(!p||!p.company)return false;
 // ①属性はAI分類済みの名刺だけ絞り込む（未分類の名刺は点数を低くして残す）
 if(useNew&&nv.attribute&&nv.attribute!==RULES.ANY&&nv.attribute!==RULES.OTHER&&RULES.ATTRIBUTES.includes(p.attribute)&&p.attribute!==nv.attribute)return ng('属性');
 if(exc.has(normCo(p.company)))return ng('案内済み');
+// 新アンケートでは任意項目は絞り込みに使わず、合うほど加点する（任意項目の組み合わせで候補が0件になるのを防ぐ）
+if(!useNew){
 const pl=p.listingStatus==="上場企業";
-if(listed==="上場企業のみ"&&!pl)return ng("上場");
-if(listed==="未上場のみ"&&pl)return ng("上場");
-if(!industryMatch(industry,p.industry))return ng('旧業種');
-if(!positionMatch(position,p.position))return ng('役職');
-if(!scaleMatch(scale,p.scale))return ng('規模');
-if(region.length>0&&region[0]!=='こだわらない'&&!regionMatch(region,p.prefecture))return ng('地域');
-if(!capitalMatch(capital,p.capital))return ng('資本金');
-if(!foundedMatch(years,p.founded))return ng('設立');
-if(!employeesMatch(employees,p.employees))return ng('従業員');
-if(!hiringMatch(hiring,p.hiring))return ng('採用');
-if(!maMatch(ma,p.ma))return ng('M&A');
+  if(listed==="上場企業のみ"&&!pl)return ng("上場");
+  if(listed==="未上場のみ"&&pl)return ng("上場");
+  if(!industryMatch(industry,p.industry))return ng('旧業種');
+  if(!positionMatch(position,p.position))return ng('役職');
+  if(!scaleMatch(scale,p.scale))return ng('規模');
+  if(region.length>0&&region[0]!=='こだわらない'&&!regionMatch(region,p.prefecture))return ng('地域');
+  if(!capitalMatch(capital,p.capital))return ng('資本金');
+  if(!foundedMatch(years,p.founded))return ng('設立');
+  if(!employeesMatch(employees,p.employees))return ng('従業員');
+  if(!hiringMatch(hiring,p.hiring))return ng('採用');
+  if(!maMatch(ma,p.ma))return ng('M&A');
+}
 // URLが不明の企業を除外（こだわらない以外の条件が1つでもある場合）
 const hasFilter=(industry.length>0&&!industry.includes('こだわらない'))||
   (listed&&listed!=='こだわらない')||
@@ -262,9 +265,21 @@ if(useNew){
   // 新アンケート：①属性40点・②業種30点・④部署20点・③目的10点×2＋任意項目
   const ev=RULES.evaluateCard(nv,p);
   let s2=ev.score;
-  if(scale.length>0&&!scale.includes('こだわらない')&&ps&&scale.includes(ps))s2+=5;
-  if(region.length>0&&!region.includes('こだわらない')&&regionMatch(region,pf))s2+=10;
-  pct=Math.min(Math.round((s2/(RULES.MAX_SCORE+15))*100),99);
+  // 任意項目：答えた項目ごとに、合えば加点（合わなくても候補からは外さない）
+  const set=a=>Array.isArray(a)?(a.length>0&&!a.includes('こだわらない')):(!!a&&a!=='こだわらない');
+  const opt=[
+    [set(listed),listed==='上場企業のみ'?(p.listingStatus==='上場企業'):listed==='未上場のみ'?(p.listingStatus!=='上場企業'):true,3],
+    [set(position),positionMatch(position,pp),8],
+    [set(scale),scaleMatch(scale,ps),4],
+    [set(region),regionMatch(region,pf),8],
+    [set(capital),capitalMatch(capital,p.capital),2],
+    [set(years),foundedMatch(years,p.founded),2],
+    [set(employees),employeesMatch(employees,p.employees),2],
+    [set(hiring),hiringMatch(hiring,p.hiring),2],
+    [set(ma),maMatch(ma,pm),2],
+  ];
+  let optMax=0;for(const[isSet,ok,w]of opt){if(!isSet)continue;optMax+=w;if(ok)s2+=w;}
+  pct=Math.min(Math.round((s2/(RULES.MAX_SCORE+optMax||1))*100),99);
 }
 scored.push({id:p.id||"",cardRow:p.cardRow||0,company:p.company||"",department:p.department||"",position:pp,industry:pi,scale:ps,prefecture:pf,listed:p.listed||"",employees:p.employees||"",founded:p.founded||"",capital:p.capital||"",hiring:p.hiring||"",ma:pm,features:p.features||"",siteUrl:p.siteUrl||"",score:pct,matchReason:"",recommendation:"",firstMessage:""});
 }
