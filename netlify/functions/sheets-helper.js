@@ -41,9 +41,9 @@ async function getParticipants() {
   const sheetId = process.env.GOOGLE_SHEET_ID;
   const token = await getAccessToken(serviceAccount);
 
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('名刺データ!A:AK')}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('名刺データ')}`;
   const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-  if (!res.ok) throw new Error(`Sheets API error: ${res.status}`);
+  if (!res.ok) { const t = await res.text().catch(() => ''); console.error('getParticipants Sheets error:', res.status, t.slice(0, 300)); throw new Error(`Sheets API error: ${res.status}`); }
 
   const data = await res.json();
   const rows = data.values || [];
@@ -400,10 +400,11 @@ async function saveMatchResultsForReview(userId, userInfo, matches, aiParams) {
       batchId, now, String(userId || ''), userInfo.company || '', userInfo.name || '',
       userInfo.email || '', m.company, String(m.score || ''), '未通知', aiParamsJson, String(m.cardRow || ''), memberRank
     ]);
-    await fetch(
+    const ar = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('マッチング結果'+'!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
       { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values }) }
     );
+    if (!ar.ok) { const t = await ar.text().catch(() => ''); throw new Error(`append ${ar.status} ${t.slice(0, 300)}`); }
   } catch (e) {
     console.error('saveMatchResultsForReview error:', e.message);
   }

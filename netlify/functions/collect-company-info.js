@@ -162,10 +162,10 @@ exports.handler=async(event)=>{
 
     if(action==='findUnclassified'){
       // 属性（AJ列）が空の会社を一覧にする（会社単位）
-      const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(SHEET+'!A2:AK')}`,{headers:{'Authorization':`Bearer ${token}`}});
+      const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(SHEET)}`,{headers:{'Authorization':`Bearer ${token}`}});
       const data=await res.json();
       const seen=new Map();
-      (data.values||[]).forEach(r=>{const c=String(r[0]||'').trim();if(!c)return;const k=c.normalize('NFKC').replace(/\s/g,'');if(!seen.has(k))seen.set(k,{company:c,done:!!String(r[35]||'').trim()});else if(String(r[35]||'').trim())seen.get(k).done=true;});
+      (data.values||[]).slice(1).forEach(r=>{const c=String(r[0]||'').trim();if(!c)return;const k=c.normalize('NFKC').replace(/\s/g,'');if(!seen.has(k))seen.set(k,{company:c,done:!!String(r[35]||'').trim()});else if(String(r[35]||'').trim())seen.get(k).done=true;});
       const all=[...seen.values()];
       return{statusCode:200,headers,body:JSON.stringify({success:true,totalCompanies:all.length,targets:all.filter(x=>!x.done).map(x=>x.company)})};
     }
@@ -174,7 +174,7 @@ exports.handler=async(event)=>{
       // 会社を新アンケートの「属性」と「業種詳細（最大2つ）」に分類し、その会社の全行のAJ・AK列に書き込む
       const names=(Array.isArray(body.companies)?body.companies:[]).slice(0,20);
       if(!names.length)return{statusCode:400,headers,body:JSON.stringify({error:'会社がありません'})};
-      const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(SHEET+'!A1:AK')}`,{headers:{'Authorization':`Bearer ${token}`}});
+      const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(SHEET)}`,{headers:{'Authorization':`Bearer ${token}`}});
       const rows=(await res.json()).values||[];
       const nk=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
       const want=new Set(names.map(nk));
