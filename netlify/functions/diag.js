@@ -28,6 +28,7 @@ exports.handler = async (event) => {
       await appendSystemLog(`画面:${String(b.fn || '').slice(0, 30)}`, String(b.userId || '').slice(0, 40), 'エラー', '', String(b.message || '').slice(0, 400));
       return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
     }
+    if ((event.queryStringParameters || {}).selftest) { await appendSystemLog('selftest', '', 'OK', 0, 'ログ書き込みテスト'); }
     const tk = await token();
     const [log, mr, cards] = await Promise.all([values(tk, LOG_SHEET), values(tk, 'マッチング結果!A:I'), values(tk, '名刺データ!A:A').then(async a => ({ a, aj: await values(tk, '名刺データ!AJ:AJ') }))]);
     const batches = new Map();
