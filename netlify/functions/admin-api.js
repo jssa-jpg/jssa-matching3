@@ -223,19 +223,26 @@ exports.handler=async(event)=>{
       if(!Array.isArray(items)||items.length===0)return{statusCode:400,headers,body:JSON.stringify({error:'items is required'})};
       const cardRows=await getSheet(token,'名刺データ');
       const priorityLists=await getPriorityLists();
+      // 同じ人物の名刺を先にまとめておく（1枚ずつ全行を探すと時間切れになるため）
+      const byPerson=new Map();
+      cardRows.forEach((r,i)=>{if(i===0)return;const k=personKey(r[0],r[3],r[4]);if(!k)return;if(!byPerson.has(k))byPerson.set(k,[]);byPerson.get(k).push(i);});
+      const byCompanyRows=new Map();
+      const normC0=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+      cardRows.forEach((r,i)=>{if(i===0)return;const k=normC0(r[0]);if(!k)return;byCompanyRows.set(k,r);});
       const results=items.map(it=>{
         const rowIdx=it.cardRow;
         let row=(rowIdx&&rowIdx>1)?cardRows[rowIdx-1]:null;
         // 重複名刺の整理などで行がずれた場合は、会社名で探し直す
         const normC=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
         if(row&&it.company&&normC(row[0])!==normC(it.company))row=null;
-        if(!row&&it.company){const hits=cardRows.slice(1).filter(r=>normC(r[0])===normC(it.company));row=hits.length?hits[hits.length-1]:null;}
+        if(!row&&it.company){row=byCompanyRows.get(normC(it.company))||null;}
         // 同じ人物の新しい名刺（異動・昇進後）があれば、そちらの部署・役職を表示する
         if(row){
           const key=personKey(row[0],row[3],row[4]);
           if(key){
+            const same=byPerson.get(key)||[];
             let best={values:row,cardRow:cardRows.indexOf(row)+1,cardDate:row[13]};
-            cardRows.forEach((r,i)=>{if(i===0||r===row)return;if(personKey(r[0],r[3],r[4])!==key)return;const c={values:r,cardRow:i+1,cardDate:r[13]};if(isNewerCard(c,best))best=c;});
+            same.forEach(i=>{const r=cardRows[i];if(r===row)return;const c={values:r,cardRow:i+1,cardDate:r[13]};if(isNewerCard(c,best))best=c;});
             row=best.values;
           }
         }
@@ -271,17 +278,21 @@ exports.handler=async(event)=>{
           const normCo2=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
           const uniq=[];const idxOf=new Map();
           results.forEach(r=>{const k=normCo2(r.company);if(!idxOf.has(k)){idxOf.set(k,uniq.length);uniq.push(r);}});
-          const list=uniq.map((r,i)=>`${i+1}. ${r.company}（${r.industry||'業種不明'}・${r.address||'地域不明'}・スコア${r.score}%）\n特徴：${r.features||'情報なし'}`).join('\n\n');
-          const prompt=`あなたはJSSAエコシステムマッチングツールのAIアシスタントです。\n以下の企業リストについて、それぞれ次の3つを日本語で生成してください。\n\nアンケート回答：\n${RULES.isNewSurvey(ap)?`- 会いたい相手の属性：${ap.attribute===RULES.OTHER?ap.attributeOther:ap.attribute}\n- 希望する業種・領域：${ap.industryDetail===RULES.OTHER?ap.industryOther:ap.industryDetail}\n- 面談の目的：${(ap.purposes||[]).map(p=>p===RULES.OTHER?ap.purposeOther:p).join('、')}\n- 会いたい部署・担当者：${(ap.departments||[]).map(p=>p===RULES.OTHER?ap.departmentOther:p).join('、')}\n`:`- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n`}- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n${appDetails?`\n申込者の情報：${appDetails}\n`:''}\n企業リスト：\n${list}\n\n① matchReason：マッチ理由（50文字以内）\n② recommendation：推薦理由（150文字以内）\n③ meetingBenefit：この企業（リストの各社）から見て、申込者と面談することのメリット（150文字程度、企業側の立場で前向きになれる具体的な内容）\n\n以下のJSON配列形式のみで回答してください（企業リストと同じ順番・同じ件数で）：\n[{"matchReason":"...","recommendation":"...","meetingBenefit":"..."}]`;
-          const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:3000,messages:[{role:'user',content:prompt}]})});
-          const aiData=await aiRes.json();
-          if(!aiRes.ok){
-            console.error('Anthropic API error:',aiRes.status,JSON.stringify(aiData));
-          }
-          const aiText=aiData.content&&aiData.content[0]?aiData.content[0].text:'[]';
-          console.log('AI raw response text:',aiText.slice(0,500));
-          const cleanText=aiText.replace(/```json|```/g,'').trim();
-          const aiArr=JSON.parse(cleanText);
+          const surveyText=`${RULES.isNewSurvey(ap)?`- 会いたい相手の属性：${ap.attribute===RULES.OTHER?ap.attributeOther:ap.attribute}\n- 希望する業種・領域：${ap.industryDetail===RULES.OTHER?ap.industryOther:ap.industryDetail}\n- 面談の目的：${(ap.purposes||[]).map(p=>p===RULES.OTHER?ap.purposeOther:p).join('、')}\n- 会いたい部署・担当者：${(ap.departments||[]).map(p=>p===RULES.OTHER?ap.departmentOther:p).join('、')}\n`:`- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n`}- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n`;
+          // 1社ずつ同時にAIへ依頼する（まとめて頼むより早く、1社が遅れても他社は表示できる）。17秒で打ち切り、間に合わない会社は推薦理由なしで返す
+          const askOne=async r=>{
+            const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),17000);
+            try{
+              const prompt=`あなたはJSSAエコシステムマッチングツールのAIアシスタントです。\n次の企業について、3つの項目を日本語で生成してください。\n\nアンケート回答：\n${surveyText}${appDetails?`\n申込者の情報：${appDetails}\n`:''}\n企業：${r.company}（${r.industry||'業種不明'}・${r.address||'地域不明'}・スコア${r.score}%）\n特徴：${r.features||'情報なし'}\n\n① matchReason：マッチ理由（50文字以内）\n② recommendation：推薦理由（150文字以内）\n③ meetingBenefit：この企業から見て、申込者と面談することのメリット（150文字程度、企業側の立場で前向きになれる具体的な内容）\n\n次のJSON形式のみで回答してください：\n{"matchReason":"...","recommendation":"...","meetingBenefit":"..."}`;
+              const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl.signal,headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:prompt}]})});
+              const aiData=await aiRes.json();
+              if(!aiRes.ok){console.error('Anthropic API error:',aiRes.status,JSON.stringify(aiData).slice(0,300));return{};}
+              const t=(aiData.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('').replace(/```json|```/g,'');
+              const m=t.match(/\{[\s\S]*\}/);return m?JSON.parse(m[0]):{};
+            }catch(e){console.error('AI enrich error:',r.company,e.message);return{};}
+            finally{clearTimeout(timer);}
+          };
+          const aiArr=await Promise.all(uniq.map(askOne));
           enriched=results.map(r=>{const a=aiArr[idxOf.get(normCo2(r.company))]||{};return{...r,matchReason:a.matchReason||'',recommendation:a.recommendation||'',meetingBenefit:a.meetingBenefit||''};});
         }catch(e){console.error('AI enrich error:',e.message,e.stack);}
       }
