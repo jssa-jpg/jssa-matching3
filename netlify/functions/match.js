@@ -211,23 +211,24 @@ if(companySearch){
 }
 
 const useNew=RULES.isNewSurvey(nv);
+const why={};const ng=k=>{why[k]=(why[k]||0)+1;return false;};
 const cands=all.filter(p=>{
 if(!p||!p.company)return false;
 // ①属性はAI分類済みの名刺だけ絞り込む（未分類の名刺は点数を低くして残す）
-if(useNew&&nv.attribute&&nv.attribute!==RULES.ANY&&nv.attribute!==RULES.OTHER&&RULES.ATTRIBUTES.includes(p.attribute)&&p.attribute!==nv.attribute)return false;
-if(exc.has(normCo(p.company)))return false;
+if(useNew&&nv.attribute&&nv.attribute!==RULES.ANY&&nv.attribute!==RULES.OTHER&&RULES.ATTRIBUTES.includes(p.attribute)&&p.attribute!==nv.attribute)return ng('属性');
+if(exc.has(normCo(p.company)))return ng('案内済み');
 const pl=p.listingStatus==="上場企業";
-if(listed==="上場企業のみ"&&!pl)return false;
-if(listed==="未上場のみ"&&pl)return false;
-if(!industryMatch(industry,p.industry))return false;
-if(!positionMatch(position,p.position))return false;
-if(!scaleMatch(scale,p.scale))return false;
-if(region.length>0&&region[0]!=='こだわらない'&&!regionMatch(region,p.prefecture))return false;
-if(!capitalMatch(capital,p.capital))return false;
-if(!foundedMatch(years,p.founded))return false;
-if(!employeesMatch(employees,p.employees))return false;
-if(!hiringMatch(hiring,p.hiring))return false;
-if(!maMatch(ma,p.ma))return false;
+if(listed==="上場企業のみ"&&!pl)return ng("上場");
+if(listed==="未上場のみ"&&pl)return ng("上場");
+if(!industryMatch(industry,p.industry))return ng('旧業種');
+if(!positionMatch(position,p.position))return ng('役職');
+if(!scaleMatch(scale,p.scale))return ng('規模');
+if(region.length>0&&region[0]!=='こだわらない'&&!regionMatch(region,p.prefecture))return ng('地域');
+if(!capitalMatch(capital,p.capital))return ng('資本金');
+if(!foundedMatch(years,p.founded))return ng('設立');
+if(!employeesMatch(employees,p.employees))return ng('従業員');
+if(!hiringMatch(hiring,p.hiring))return ng('採用');
+if(!maMatch(ma,p.ma))return ng('M&A');
 // URLが不明の企業を除外（こだわらない以外の条件が1つでもある場合）
 const hasFilter=(industry.length>0&&!industry.includes('こだわらない'))||
   (listed&&listed!=='こだわらない')||
@@ -296,7 +297,7 @@ let saveErr='';
 try{
   await saveMatchResultsForReview(userId,ui,top100.map(m=>({company:m.company,score:m.score,cardRow:m.cardRow})),aiParams);
 }catch(e){saveErr=e.message;console.error('saveMatchResultsForReview error:',e.message);}
-await appendSystemLog('match',userId,saveErr?'保存失敗':(top100.length?'OK':'候補0件'),Date.now()-t0,`名刺${all.length}件(読込${tRead}ms) 候補${cands.length}件 保存${topCompanies.size}社 新アンケート=${useNew?'はい':'いいえ'} 属性=${nv.attribute||'-'} 業種=${nv.industryDetail||'-'}${saveErr?' 保存エラー:'+saveErr:''}`);
+await appendSystemLog('match',userId,saveErr?'保存失敗':(top100.length?'OK':'候補0件'),Date.now()-t0,`名刺${all.length}件(読込${tRead}ms) 候補${cands.length}件 保存${topCompanies.size}社 新アンケート=${useNew?'はい':'いいえ'} 属性=${nv.attribute||'-'} 業種=${nv.industryDetail||'-'} 除外内訳=${JSON.stringify(why)} 任意=${JSON.stringify({listed,scale,position,years,capital,employees,hiring,ma,region})}${saveErr?' 保存エラー:'+saveErr:''}`);
 return{statusCode:200,headers,body:JSON.stringify({success:true,submitted:true,count:topCompanies.size})};
 }catch(e){await appendSystemLog('match',logUser,'エラー',Date.now()-t0,e.message);return{statusCode:500,headers,body:JSON.stringify({error:e.message,stack:e.stack})};}
 };

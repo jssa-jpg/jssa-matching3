@@ -30,7 +30,7 @@ exports.handler = async (event) => {
     }
     if ((event.queryStringParameters || {}).selftest) { await appendSystemLog('selftest', '', 'OK', 0, 'ログ書き込みテスト'); }
     const tk = await token();
-    const [log, mr, cards] = await Promise.all([values(tk, LOG_SHEET), values(tk, 'マッチング結果!A:I'), values(tk, '名刺データ!A:A').then(async a => ({ a, aj: await values(tk, '名刺データ!AJ:AJ') }))]);
+    const [log, mr, cards] = await Promise.all([values(tk, LOG_SHEET), values(tk, 'マッチング結果!A:I'), values(tk, '名刺データ!A:A').then(async a => ({ a, aj: await values(tk, '名刺データ!AJ:AJ'), m: await values(tk, '名刺データ!M:M') }))]);
     const batches = new Map();
     (mr || []).slice(1).forEach(r => {
       const id = r[0] || ''; if (!id) return;
@@ -40,7 +40,10 @@ exports.handler = async (event) => {
     const latest = [...batches.values()].sort((a, b) => b.日時.localeCompare(a.日時)).slice(0, 10);
     const cardRows = (cards.a || []).slice(1).filter(r => r[0]).length;
     const classified = (cards.aj || []).slice(1).filter(r => r[0]).length;
+    const attrDist = {};
+    (cards.aj || []).slice(1).forEach((r, i) => { const k = String(r[0] || '（未分類）'); const u = String(((cards.m || [])[i + 1] || [])[0] || '').trim(); const ok = u && u !== '不明'; attrDist[k] = attrDist[k] || { 件数: 0, URLあり: 0 }; attrDist[k].件数++; if (ok) attrDist[k].URLあり++; });
     const body = {
+      属性の内訳: attrDist,
       確認日時: jst(new Date().toISOString()),
       システムログ_最新30件: log ? log.slice(1).slice(-30).reverse() : '（まだ記録なし）',
       マッチング結果_最新10バッチ: latest,
