@@ -4,6 +4,7 @@
 //  action:'mergeDuplicates' … 古い名刺の企業情報を最新の名刺へ引き継いだうえで、古い名刺の行を削除する
 //  action:'enrich'    … 指定行の会社をAIで調べてO〜W列に書き込む（Web検索あり。時間切れ時は知識ベースで再実行）
 const{personKey,isNewerCard}=require('./sheets-helper');
+const RULES=require('./survey-rules');
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const ADMIN_PASSWORD=process.env.ADMIN_PASSWORD;
 const SHEET='名刺データ';
@@ -157,6 +158,70 @@ exports.handler=async(event)=>{
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
         body:JSON.stringify({requests:delRows.map(r=>({deleteDimension:{range:{sheetId:gid,dimension:'ROWS',startIndex:r-1,endIndex:r}}}))})});
       return{statusCode:200,headers,body:JSON.stringify({success:true,merged:groups.length,deleted:delRows.length,copied:data2.length})};
+    }
+
+    if(action==='findUnclassified'){
+      // 属性（AJ列）が空の会社を一覧にする（会社単位）
+      const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(SHEET+'!A2:AK')}`,{headers:{'Authorization':`Bearer ${token}`}});
+      const data=await res.json();
+      const seen=new Map();
+      (data.values||[]).forEach(r=>{const c=String(r[0]||'').trim();if(!c)return;const k=c.normalize('NFKC').replace(/\s/g,'');if(!seen.has(k))seen.set(k,{company:c,done:!!String(r[35]||'').trim()});else if(String(r[35]||'').trim())seen.get(k).done=true;});
+      const all=[...seen.values()];
+      return{statusCode:200,headers,body:JSON.stringify({success:true,totalCompanies:all.length,targets:all.filter(x=>!x.done).map(x=>x.company)})};
+    }
+
+    if(action==='classify'){
+      // 会社を新アンケートの「属性」と「業種詳細（最大2つ）」に分類し、その会社の全行のAJ・AK列に書き込む
+      const names=(Array.isArray(body.companies)?body.companies:[]).slice(0,20);
+      if(!names.length)return{statusCode:400,headers,body:JSON.stringify({error:'会社がありません'})};
+      const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(SHEET+'!A1:AK')}`,{headers:{'Authorization':`Bearer ${token}`}});
+      const rows=(await res.json()).values||[];
+      const nk=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+      const want=new Set(names.map(nk));
+      const info=new Map();
+      rows.forEach((r,i)=>{if(i===0)return;const k=nk(r[0]);if(!want.has(k))return;if(!info.has(k))info.set(k,{company:String(r[0]).trim(),rows:[],depts:new Set(),old:r[14]||'',scale:r[15]||'',listed:r[19]||'',features:r[22]||'',url:r[12]||''});const x=info.get(k);x.rows.push(i+1);if(r[1])x.depts.add(String(r[1]).trim());if(!x.features&&r[22])x.features=r[22];});
+      const list=[...info.values()];
+      const prompt=`次の会社を、スタートアップ支援のマッチング用に分類してください。
+各社について「attribute」を下の属性から1つ、「industries」を下の業種・領域から1〜2つ選びます（主な事業の順）。
+VC・CVC・銀行・コンサル・士業などの支援側の会社は、industries に「投資・支援の注力領域」を選び、わからなければ自社の業種（金融・FinTech、経営コンサルティング、法務・会計・税務など）を選んでください。
+上場している大手や、スタートアップでない一般企業は「大企業・事業会社」にします。
+
+【属性】${RULES.ATTRIBUTES.join(' / ')}
+【業種・領域】${RULES.INDUSTRIES.join(' / ')}
+
+【会社一覧】
+${list.map((c,i)=>`${i+1}. ${c.company}｜旧業種:${c.old||'-'}｜規模:${c.scale||'-'}｜上場:${c.listed||'-'}｜部署例:${[...c.depts].slice(0,3).join('、')||'-'}｜URL:${c.url||'-'}｜概要:${String(c.features).slice(0,120)||'-'}`).join('\n')}
+
+回答はJSON配列のみ（説明不要）。会社の順番・件数は一覧と同じにしてください。
+[{"no":1,"attribute":"...","industries":["...","..."]}]`;
+      const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),22000);
+      let arr=[];
+      try{
+        const ai=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl.signal,headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2500,messages:[{role:'user',content:prompt}]})});
+        const d=await ai.json();
+        const text=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+        const m=text.replace(/```json|```/g,'').match(/\[[\s\S]*\]/);
+        arr=m?JSON.parse(m[0]):[];
+      }finally{clearTimeout(timer);}
+      // AJ・AK列の見出しと列数を用意する
+      const meta=await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`,{headers:{'Authorization':`Bearer ${token}`}})).json();
+      const prop=(meta.sheets||[]).map(x=>x.properties).find(p=>p.title===SHEET);
+      if(prop&&prop.gridProperties&&prop.gridProperties.columnCount<37){
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requests:[{appendDimension:{sheetId:prop.sheetId,dimension:'COLUMNS',length:37-prop.gridProperties.columnCount}}]})});
+      }
+      const data2=[];
+      if(!rows[0]||rows[0][35]!=='属性')data2.push({range:`${SHEET}!AJ1:AK1`,values:[['属性','業種詳細']]});
+      const out=[];
+      list.forEach((c,i)=>{
+        const a=arr.find(x=>Number(x.no)===i+1)||arr[i]||{};
+        const attr=RULES.ATTRIBUTES.includes(a.attribute)?a.attribute:'';
+        const inds=(Array.isArray(a.industries)?a.industries:[]).filter(x=>RULES.INDUSTRIES.includes(x)).slice(0,2);
+        const attrVal=attr||'（分類不可）';
+        c.rows.forEach(r=>data2.push({range:`${SHEET}!AJ${r}:AK${r}`,values:[[attrVal,inds.join('／')]]}));
+        out.push({company:c.company,attribute:attrVal,industries:inds,rows:c.rows.length});
+      });
+      if(data2.length)await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data2})});
+      return{statusCode:200,headers,body:JSON.stringify({success:true,results:out})};
     }
 
     const row=parseInt(body.row,10);

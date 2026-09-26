@@ -41,7 +41,7 @@ async function getParticipants() {
   const sheetId = process.env.GOOGLE_SHEET_ID;
   const token = await getAccessToken(serviceAccount);
 
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A:Z`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('名刺データ!A:AK')}`;
   const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Sheets API error: ${res.status}`);
 
@@ -80,6 +80,8 @@ async function getParticipants() {
     const maHistory  = clean(row[21]);
     const features   = clean(row[22]);
     const facebook   = clean(row[23]);
+    const attribute  = clean(row[35]);      // AJ列：相手の属性（AI分類）
+    const industryDetail = clean(row[36]); // AK列：業種詳細（AI分類、最大2つを「／」区切り）
 
     if (!company) continue;
 
@@ -110,7 +112,7 @@ async function getParticipants() {
       hiring, ma: maHistory,
       features: (features || '').slice(0, 300),
       prefecture, address: addressDisplay,
-      name, email, siteUrl, facebook,
+      name, email, siteUrl, facebook, attribute, industryDetail,
       telOffice, telDept, telDirect, fax, mobile, zip, cardDate,
       listingStatus: isListed ? '上場企業' : '未上場企業',
       employeeScale: scaleClass,
@@ -534,4 +536,22 @@ function priorityTier(company, lists) {
   return 0;
 }
 
-module.exports = { getPriorityLists, priorityTier, changeRequestBalance, personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
+// 会員が最後に回答したマッチングアンケート（マッチング結果シートJ列）を返す。回答の編集画面で使う
+async function getLastSurvey(userId) {
+  try {
+    if (!userId || userId === 'guest') return null;
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const rows = (await _getValues(token, sheetId, 'マッチング結果!A:J')).values.slice(1);
+    let last = null;
+    for (const r of rows) if (String(r[2] || '') === String(userId) && (!last || String(r[1] || '') >= String(last[1] || ''))) last = r;
+    if (!last) return null;
+    try { return { answers: JSON.parse(last[9] || '{}'), createdAt: last[1] || '' }; } catch (e) { return null; }
+  } catch (e) {
+    console.error('getLastSurvey error:', e.message);
+    return null;
+  }
+}
+
+module.exports = { getLastSurvey, getPriorityLists, priorityTier, changeRequestBalance, personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };

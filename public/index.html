@@ -110,6 +110,18 @@ select option{background:#1a2030;color:#fff}
 .pgn-btn{background:#0B0F1A;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;color:#fff;cursor:pointer}
 .pgn-btn:disabled{opacity:0.3;cursor:default}
 .hero,.form-wrap,#results-section .results-wrap{max-width:480px;margin-left:auto;margin-right:auto}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:8px 12px;border-radius:18px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.8);font-size:12.5px;line-height:1.3;cursor:pointer;font-family:inherit}
+.chip:hover{border-color:#97C459}
+.chip.on{background:#639922;border-color:#639922;color:#fff;font-weight:600}
+.chip.any{border-style:dashed}
+.chip-group{font-size:11px;font-weight:700;color:#97C459;margin:12px 0 6px}
+.chip-group:first-child{margin-top:0}
+.other-input{width:100%;margin-top:8px;background:rgba(255,255,255,0.08);border:1px solid #639922;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;outline:none}
+.q-count{font-size:10px;color:rgba(255,255,255,0.5);font-weight:500}
+.q-limit{font-size:11px;color:#E87040;margin-top:6px;display:none}
+.field.invalid .chips,.field.invalid #q2{outline:1px solid rgba(197,90,17,0.6);outline-offset:4px;border-radius:8px}
+.last-note{background:rgba(99,153,34,0.12);border:1px solid rgba(99,153,34,0.35);border-radius:8px;padding:10px 12px;font-size:12px;color:rgba(255,255,255,0.8);line-height:1.6;margin-bottom:14px}
 </style>
 </head>
 <body>
@@ -134,37 +146,38 @@ select option{background:#1a2030;color:#fff}
 <div class="form-wrap">
   <div class="form-section">
     <div class="section-label">マッチングアンケート（必須項目）</div>
+    <div id="last-note" class="last-note" style="display:none"></div>
+    <div class="field" id="field-q1">
+      <div class="field-label">① 会いたい相手の属性 <span class="req-badge">必須</span> <span class="multi-badge">1つ選択</span></div>
+      <div class="chips" id="q1"></div>
+      <input type="text" class="other-input" id="q1-other" placeholder="会いたい相手の属性を入力してください" style="display:none">
+    </div>
+    <div class="field" id="field-q2">
+      <div class="field-label">② 希望する業種・領域 <span class="req-badge">必須</span> <span class="multi-badge">1つ選択</span></div>
+      <div id="q2"></div>
+      <input type="text" class="other-input" id="q2-other" placeholder="希望する業種・領域を入力してください" style="display:none">
+    </div>
+    <div class="field" id="field-q3">
+      <div class="field-label">③ 面談の目的 <span class="req-badge">必須</span> <span class="multi-badge">最大2つまで</span> <span class="q-count" id="q3-count"></span></div>
+      <div class="chips" id="q3"></div>
+      <input type="text" class="other-input" id="q3-other" placeholder="面談の目的を入力してください" style="display:none">
+    </div>
+    <div class="field" id="field-q4">
+      <div class="field-label">④ 会いたい部署・担当者 <span class="req-badge">必須</span> <span class="multi-badge">最大3つまで</span> <span class="q-count" id="q4-count"></span></div>
+      <div class="chips" id="q4"></div>
+      <input type="text" class="other-input" id="q4-other" placeholder="会いたい部署・担当者を入力してください" style="display:none">
+    </div>
+  </div>
+  <div class="form-section">
+    <div class="section-label">任意項目（精度向上）</div>
     <div class="field">
-      <div class="field-label">① 業種 <span class="req-badge">必須</span></div>
-      <div class="ms-wrap" id="ms1">
-        <button type="button" class="ms-trigger invalid" id="ms1-btn" onclick="toggleMs('ms1')"><span id="ms1-text">選択してください</span><span class="ms-arrow">▾</span></button>
-        <div class="ms-dropdown" id="ms1-drop">
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="こだわらない" onchange="updateSingleMs('ms1',this.value)">こだわらない</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="VC・CVC・エンジェル・投資事業" onchange="updateSingleMs('ms1',this.value)">VC・CVC・エンジェル・投資事業</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="M&A仲介会社・FA" onchange="updateSingleMs('ms1',this.value)">M&A仲介会社・FA</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="コンサルタント・士業・監査法人" onchange="updateSingleMs('ms1',this.value)">コンサルタント・士業・監査法人</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="金融・保険・証券代行" onchange="updateSingleMs('ms1',this.value)">金融・保険・証券代行</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="教育・研究機関・学校法人" onchange="updateSingleMs('ms1',this.value)">教育・研究機関・学校法人</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="官公庁・自治体・各種団体等" onchange="updateSingleMs('ms1',this.value)">官公庁・自治体・各種団体等</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="ITサービス・AI・通信・Web3" onchange="updateSingleMs('ms1',this.value)">ITサービス・AI・通信・Web3</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="人材・HR系サービス" onchange="updateSingleMs('ms1',this.value)">人材・HR系サービス</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="製造業・食品・環境・エネルギー・バイオ・宇宙・農林水産" onchange="updateSingleMs('ms1',this.value)">製造業・食品・環境・エネルギー等</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="観光・エンタメ・スポーツ・アート" onchange="updateSingleMs('ms1',this.value)">観光・エンタメ・スポーツ・アート</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="医療・ヘルスケア・福祉・保育・シニア" onchange="updateSingleMs('ms1',this.value)">医療・ヘルスケア・福祉・保育等</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="商社・流通・小売・EC" onchange="updateSingleMs('ms1',this.value)">商社・流通・小売・EC</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="建設・不動産" onchange="updateSingleMs('ms1',this.value)">建設・不動産</label>
-          <label class="ms-item"><input type="radio" name="ms1-radio" value="広告・メディア・出版" onchange="updateSingleMs('ms1',this.value)">広告・メディア・出版</label>
-        </div>
-      </div>
+      <div class="field-label">⑤ 上場/未上場 <span class="opt-badge">任意</span></div>
+      <select id="f-listed"><option value="こだわらない">こだわらない</option><option>上場企業のみ</option><option>未上場のみ</option></select>
     </div>
     <div class="field">
-      <div class="field-label">② 上場/未上場 <span class="req-badge">必須</span></div>
-      <select id="f-listed"><option value="">選択してください</option><option>こだわらない</option><option>上場企業のみ</option><option>未上場のみ</option></select>
-    </div>
-    <div class="field">
-      <div class="field-label">③ 企業規模 <span class="req-badge">必須</span> <span class="multi-badge">複数可</span></div>
+      <div class="field-label">⑥ 企業規模 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
       <div class="ms-wrap" id="ms3">
-        <button type="button" class="ms-trigger invalid" id="ms3-btn" onclick="toggleMs('ms3')"><span id="ms3-text">選択してください</span><span class="ms-arrow">▾</span></button>
+        <button type="button" class="ms-trigger" id="ms3-btn" onclick="toggleMs('ms3')"><span id="ms3-text">こだわらない</span><span class="ms-arrow">▾</span></button>
         <div class="ms-dropdown" id="ms3-drop">
           <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms3',this.value)">こだわらない</label>
           <label class="ms-item"><input type="checkbox" value="EP" onchange="updateMs('ms3',this.value)">EP（500名以上・大手企業）</label>
@@ -174,9 +187,9 @@ select option{background:#1a2030;color:#fff}
       </div>
     </div>
     <div class="field">
-      <div class="field-label">④ 役職クラス <span class="req-badge">必須</span> <span class="multi-badge">複数可</span></div>
+      <div class="field-label">⑦ 役職クラス <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
       <div class="ms-wrap" id="ms4">
-        <button type="button" class="ms-trigger invalid" id="ms4-btn" onclick="toggleMs('ms4')"><span id="ms4-text">選択してください</span><span class="ms-arrow">▾</span></button>
+        <button type="button" class="ms-trigger" id="ms4-btn" onclick="toggleMs('ms4')"><span id="ms4-text">こだわらない</span><span class="ms-arrow">▾</span></button>
         <div class="ms-dropdown" id="ms4-drop">
           <label class="ms-item"><input type="checkbox" value="こだわらない" onchange="updateMs('ms4',this.value)">こだわらない</label>
           <label class="ms-item"><input type="checkbox" value="経営者・役員" onchange="updateMs('ms4',this.value)">経営者・役員</label>
@@ -189,11 +202,8 @@ select option{background:#1a2030;color:#fff}
         </div>
       </div>
     </div>
-  </div>
-  <div class="form-section">
-    <div class="section-label">任意項目（精度向上）</div>
     <div class="field">
-      <div class="field-label">⑤ 設立年数 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="field-label">⑧ 設立年数 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
       <div class="ms-wrap" id="ms5">
         <button type="button" class="ms-trigger" id="ms5-btn" onclick="toggleMs('ms5')"><span id="ms5-text">こだわらない</span><span class="ms-arrow">▾</span></button>
         <div class="ms-dropdown" id="ms5-drop">
@@ -208,7 +218,7 @@ select option{background:#1a2030;color:#fff}
       </div>
     </div>
     <div class="field">
-      <div class="field-label">⑥ 資本金 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="field-label">⑨ 資本金 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
       <div class="ms-wrap" id="ms6">
         <button type="button" class="ms-trigger" id="ms6-btn" onclick="toggleMs('ms6')"><span id="ms6-text">こだわらない</span><span class="ms-arrow">▾</span></button>
         <div class="ms-dropdown" id="ms6-drop">
@@ -223,7 +233,7 @@ select option{background:#1a2030;color:#fff}
       </div>
     </div>
     <div class="field">
-      <div class="field-label">⑦ 従業員数 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="field-label">⑩ 従業員数 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
       <div class="ms-wrap" id="ms7">
         <button type="button" class="ms-trigger" id="ms7-btn" onclick="toggleMs('ms7')"><span id="ms7-text">こだわらない</span><span class="ms-arrow">▾</span></button>
         <div class="ms-dropdown" id="ms7-drop">
@@ -239,7 +249,7 @@ select option{background:#1a2030;color:#fff}
       </div>
     </div>
     <div class="field">
-      <div class="field-label">⑧ 年間採用人数 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="field-label">⑪ 年間採用人数 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
       <div class="ms-wrap" id="ms8">
         <button type="button" class="ms-trigger" id="ms8-btn" onclick="toggleMs('ms8')"><span id="ms8-text">こだわらない</span><span class="ms-arrow">▾</span></button>
         <div class="ms-dropdown" id="ms8-drop">
@@ -254,11 +264,11 @@ select option{background:#1a2030;color:#fff}
       </div>
     </div>
     <div class="field">
-      <div class="field-label">⑨ M&amp;A実績 <span class="opt-badge">任意</span></div>
+      <div class="field-label">⑫ M&amp;A実績 <span class="opt-badge">任意</span></div>
       <select id="f-ma"><option value="">こだわらない</option><option>あり</option><option>なし</option></select>
     </div>
     <div class="field">
-      <div class="field-label">⑩ 地域 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
+      <div class="field-label">⑬ 地域 <span class="opt-badge">任意</span> <span class="multi-badge">複数可</span></div>
       <div class="ms-wrap" id="ms10">
         <button type="button" class="ms-trigger" id="ms10-btn" onclick="toggleMs('ms10')"><span id="ms10-text">こだわらない（全国）</span><span class="ms-arrow">▾</span></button>
         <div class="ms-dropdown" id="ms10-drop">
@@ -275,7 +285,7 @@ select option{background:#1a2030;color:#fff}
       </div>
     </div>
   </div>
-  <div class="err-msg" id="err-msg">①業種・②上場/未上場・③企業規模・④役職クラス はすべて選択してください</div>
+  <div class="err-msg" id="err-msg"></div>
   <div id="rank-info" style="text-align:center;font-size:12px;color:#6B7280;margin-bottom:6px"></div>
   <button class="submit-btn" id="submit-btn" onclick="doSearch()">✨ マッチングを申し込む</button>
   <div id="remaining-info" style="text-align:center;font-size:11px;color:#9CA3AF;margin-top:-2px;margin-bottom:12px"></div>
@@ -295,7 +305,57 @@ select option{background:#1a2030;color:#fff}
 const jssaUser=sessionStorage.getItem('jssa_user');
 if(!jssaUser){window.location.href='/login';}
 const currentUser=jssaUser?JSON.parse(jssaUser):{};
-const reqMs=['ms1','ms3','ms4'];
+const reqMs=[];
+// ===== 新しいマッチングアンケート（①〜④）=====
+const ANY='こだわらない',OTHER='その他（自由記入）';
+const Q={
+  q1:{max:1,any:true,opts:['大企業・事業会社','スタートアップ','VC・投資ファンド','CVC・事業会社の投資部門','エンジェル投資家','銀行・信用金庫','M&A仲介会社・FA','コンサルティング会社','士業・監査法人','大学・研究機関','官公庁・自治体','業界団体・支援機関']},
+  q2:{max:1,any:true,groups:{'IT・先端技術':['AI','ITサービス・SaaS','通信','Web3・ブロックチェーン','ロボット・自動化','半導体・電子部品','宇宙・航空','その他ディープテック'],'産業・インフラ':['製造業','建設','不動産','物流・運輸','モビリティ・自動車','エネルギー','環境・脱炭素','農業・水産業'],'消費者向け事業':['食品・飲料','小売・流通','EC','観光・宿泊','エンタメ','スポーツ','アート・文化','美容・ファッション'],'社会・生活':['医療・ヘルスケア','介護・福祉','保育・子育て','教育','人材・HRサービス'],'ビジネス支援':['金融・FinTech','保険','広告・マーケティング','メディア・出版','商社','経営コンサルティング','AI・DXコンサルティング','人事・採用コンサルティング','M&A支援','法務・会計・税務']}},
+  q3:{max:2,any:false,opts:['顧客・販路の開拓','業務提携・共同事業','新規事業・オープンイノベーション','資金調達・出資','M&A・事業承継','技術開発・共同研究','採用・人材紹介','専門家への相談','情報交換']},
+  q4:{max:3,any:true,opts:['経営者・役員','経営企画・事業戦略','新規事業・オープンイノベーション','CVC・投資','M&A・事業開発','営業・販路開拓','マーケティング・広報','商品・サービス企画','研究開発・技術開発','DX・情報システム','AI活用推進','人事・採用','購買・調達','財務・経理','法務・知的財産','サステナビリティ・環境','自治体の産業振興・スタートアップ支援','大学の産学連携・研究支援']},
+};
+const sel={q1:[],q2:[],q3:[],q4:[]};
+function escHtml(v){return String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function chipHtml(q,v,cls=''){return `<button type="button" class="chip ${cls}" data-q="${q}" data-v="${escHtml(v)}" onclick="onChip('${q}',this.dataset.v)">${escHtml(v)}</button>`;}
+function buildSurvey(){
+  for(const q of ['q1','q3','q4']){const d=Q[q];document.getElementById(q).innerHTML=(d.any?chipHtml(q,ANY,'any'):'')+d.opts.map(v=>chipHtml(q,v)).join('')+chipHtml(q,OTHER);}
+  const g=Q.q2.groups;
+  document.getElementById('q2').innerHTML=`<div class="chips">${chipHtml('q2',ANY,'any')}</div>`+Object.keys(g).map(name=>`<div class="chip-group">${escHtml(name)}</div><div class="chips">${g[name].map(v=>chipHtml('q2',v)).join('')}</div>`).join('')+`<div class="chip-group">その他</div><div class="chips">${chipHtml('q2',OTHER)}</div>`;
+  for(const q of ['q1','q2','q3','q4']){const lim=document.createElement('div');lim.className='q-limit';lim.id=q+'-limit';document.getElementById('field-'+q).appendChild(lim);}
+  renderSurvey();
+}
+function onChip(q,v){
+  const d=Q[q];let cur=sel[q];
+  const lim=document.getElementById(q+'-limit');lim.style.display='none';
+  if(cur.includes(v)){cur=cur.filter(x=>x!==v);}
+  else if(v===ANY){cur=[ANY];}
+  else{
+    cur=cur.filter(x=>x!==ANY);
+    if(d.max===1)cur=[v];
+    else if(cur.length>=d.max){lim.textContent=`最大${d.max}つまで選べます。ほかを外してから選んでください。`;lim.style.display='block';return;}
+    else cur=[...cur,v];
+  }
+  sel[q]=cur;renderSurvey();
+}
+function renderSurvey(){
+  for(const q of ['q1','q2','q3','q4']){
+    document.querySelectorAll(`.chip[data-q="${q}"]`).forEach(b=>b.classList.toggle('on',sel[q].includes(b.dataset.v)));
+    document.getElementById(q+'-other').style.display=sel[q].includes(OTHER)?'block':'none';
+    const c=document.getElementById(q+'-count');if(c)c.textContent=`（${sel[q].length}/${Q[q].max} 選択中）`;
+    if(sel[q].length)document.getElementById('field-'+q).classList.remove('invalid');
+  }
+}
+function collectSurvey(){
+  const other=q=>sel[q].includes(OTHER)?document.getElementById(q+'-other').value.trim():'';
+  return{attribute:sel.q1[0]||'',attributeOther:other('q1'),industryDetail:sel.q2[0]||'',industryOther:other('q2'),purposes:sel.q3.slice(),purposeOther:other('q3'),departments:sel.q4.slice(),departmentOther:other('q4')};
+}
+function applySurvey(a){
+  if(!a)return;
+  const pick=(q,vals)=>{const all=Q[q].opts||Object.values(Q[q].groups).flat();return(vals||[]).filter(v=>v===ANY||v===OTHER||all.includes(v));};
+  sel.q1=pick('q1',a.attribute?[a.attribute]:[]);sel.q2=pick('q2',a.industryDetail?[a.industryDetail]:[]);sel.q3=pick('q3',a.purposes).slice(0,2);sel.q4=pick('q4',a.departments).slice(0,3);
+  document.getElementById('q1-other').value=a.attributeOther||'';document.getElementById('q2-other').value=a.industryOther||'';document.getElementById('q3-other').value=a.purposeOther||'';document.getElementById('q4-other').value=a.departmentOther||'';
+  renderSurvey();
+}
 function toggleMs(id){const drop=document.getElementById(id+'-drop');const btn=document.getElementById(id+'-btn');const isOpen=drop.classList.contains('open');document.querySelectorAll('.ms-dropdown.open').forEach(d=>{d.classList.remove('open');});document.querySelectorAll('.ms-trigger.open').forEach(b=>{b.classList.remove('open');});if(!isOpen){drop.classList.add('open');btn.classList.add('open');}}
 document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap')){document.querySelectorAll('.ms-dropdown.open').forEach(d=>d.classList.remove('open'));document.querySelectorAll('.ms-trigger.open').forEach(b=>b.classList.remove('open'));}});
 function updateMs(id,changedVal){
@@ -333,14 +393,17 @@ function updateSingleMs(id,value){
 }
 // お気に入り・企業検索・カード表示・会いたいリクエストはアプリ2では非公開（管理者経由フローに変更のため未使用）
 async function doSearch(){
-const listed=document.getElementById('f-listed').value;
-const ind=getMs('ms1');const scale=getMs('ms3');const pos=getMs('ms4');
-const miss=ind.length===0||!listed||scale.length===0||pos.length===0;
-const errEl=document.getElementById('err-msg');errEl.classList.toggle('show',miss);if(miss)return;
+const sv=collectSurvey();
+const errs=[];
+const need=[['q1','①会いたい相手の属性'],['q2','②希望する業種・領域'],['q3','③面談の目的'],['q4','④会いたい部署・担当者']];
+need.forEach(([q,label])=>{const bad=sel[q].length===0||(sel[q].includes(OTHER)&&!document.getElementById(q+'-other').value.trim());document.getElementById('field-'+q).classList.toggle('invalid',bad);if(bad)errs.push(sel[q].length===0?`${label}を選んでください`:`${label}の「その他」の内容を入力してください`);});
+const errEl=document.getElementById('err-msg');errEl.innerHTML=errs.join('<br>');errEl.classList.toggle('show',errs.length>0);
+if(errs.length){document.getElementById('field-'+need.find(([q])=>document.getElementById('field-'+q).classList.contains('invalid'))[0]).scrollIntoView({behavior:'smooth',block:'center'});return;}
+const listed=document.getElementById('f-listed').value||'こだわらない';
 saveAnswers();
 const btn=document.getElementById('submit-btn');btn.textContent='送信中...';btn.disabled=true;
 try{
-const res=await fetch('/.netlify/functions/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:{industry:ind,listed,scale,position:pos,years:getMs('ms5'),capital:getMs('ms6'),employees:getMs('ms7'),hiring:getMs('ms8'),ma:document.getElementById('f-ma').value,region:getMs('ms10')},userInfo:{id:currentUser.id||'guest',company:currentUser.company||'ゲスト',name:currentUser.name||'',position:currentUser.position||'',email:currentUser.email||'',memberRank:currentUser.memberRank||'レギュラー'}})});
+const res=await fetch('/.netlify/functions/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:{...sv,industry:[],listed,scale:getMs('ms3'),position:getMs('ms4'),years:getMs('ms5'),capital:getMs('ms6'),employees:getMs('ms7'),hiring:getMs('ms8'),ma:document.getElementById('f-ma').value,region:getMs('ms10')},userInfo:{id:currentUser.id||'guest',company:currentUser.company||'ゲスト',name:currentUser.name||'',position:currentUser.position||'',email:currentUser.email||'',memberRank:currentUser.memberRank||'レギュラー'}})});
 const data=await res.json();
 if(!data.success)throw new Error(data.error||'エラーが発生しました');
 document.getElementById('submit-btn').style.display='none';
@@ -349,9 +412,11 @@ document.getElementById('results-section').scrollIntoView({behavior:'smooth'});
 }catch(e){alert('エラー: '+e.message);}
 finally{btn.textContent='✨ マッチングを申し込む';btn.disabled=false;}
 }
-function doReset(){document.querySelectorAll('.ms-dropdown input[type=checkbox],.ms-dropdown input[type=radio]').forEach(c=>c.checked=false);['ms1','ms3','ms4','ms5','ms6','ms7','ms8','ms10'].forEach(id=>{const isReq=reqMs.includes(id);document.getElementById(id+'-text').textContent=isReq?'選択してください':'こだわらない';const btn=document.getElementById(id+'-btn');btn.classList.remove('selected');if(isReq)btn.classList.add('invalid');document.querySelectorAll('#'+id+'-drop .ms-item').forEach(i=>i.classList.remove('checked'));});document.getElementById('f-listed').selectedIndex=0;document.getElementById('f-ma').selectedIndex=0;document.getElementById('err-msg').classList.remove('show');document.getElementById('results-section').style.display='none';document.getElementById('submit-btn').style.display='';}
-function saveAnswers(){const answers={industry:getMs('ms1'),listed:document.getElementById('f-listed').value,scale:getMs('ms3'),position:getMs('ms4'),years:getMs('ms5'),capital:getMs('ms6'),employees:getMs('ms7'),hiring:getMs('ms8'),ma:document.getElementById('f-ma').value,region:getMs('ms10')};localStorage.setItem('jssa_answers',JSON.stringify(answers));}
-function loadAnswers(){const saved=localStorage.getItem('jssa_answers');if(!saved)return;try{const answers=JSON.parse(saved);if(answers.listed)document.getElementById('f-listed').value=answers.listed;if(answers.ma)document.getElementById('f-ma').value=answers.ma;const map={ms1:'industry',ms3:'scale',ms4:'position',ms5:'years',ms6:'capital',ms7:'employees',ms8:'hiring',ms10:'region'};Object.keys(map).forEach(id=>{const savedVals=answers[map[id]]||[];if(savedVals.length>0){const inputType=id==='ms1'?'radio':'checkbox';document.querySelectorAll('#'+id+'-drop input[type='+inputType+']').forEach(c=>{if(savedVals.includes(c.value))c.checked=true;});if(id==='ms1'){updateSingleMs(id,savedVals[0]);}else{updateMs(id,null);}}});}catch(e){console.error('loadAnswers error:',e);}}
+function doReset(){sel.q1=[];sel.q2=[];sel.q3=[];sel.q4=[];['q1','q2','q3','q4'].forEach(q=>{document.getElementById(q+'-other').value='';document.getElementById('field-'+q).classList.remove('invalid');});renderSurvey();document.querySelectorAll('.ms-dropdown input[type=checkbox]').forEach(c=>c.checked=false);['ms3','ms4','ms5','ms6','ms7','ms8','ms10'].forEach(id=>{document.getElementById(id+'-text').textContent=id==='ms10'?'こだわらない（全国）':'こだわらない';document.getElementById(id+'-btn').classList.remove('selected');document.querySelectorAll('#'+id+'-drop .ms-item').forEach(i=>i.classList.remove('checked'));});document.getElementById('f-listed').selectedIndex=0;document.getElementById('f-ma').selectedIndex=0;document.getElementById('err-msg').classList.remove('show');document.getElementById('results-section').style.display='none';document.getElementById('submit-btn').style.display='';}
+function currentOptional(){return{listed:document.getElementById('f-listed').value,scale:getMs('ms3'),position:getMs('ms4'),years:getMs('ms5'),capital:getMs('ms6'),employees:getMs('ms7'),hiring:getMs('ms8'),ma:document.getElementById('f-ma').value,region:getMs('ms10')};}
+function saveAnswers(){try{localStorage.setItem('jssa_answers',JSON.stringify({...collectSurvey(),...currentOptional()}));}catch(e){}}
+function applyOptional(a){if(!a)return;if(a.listed&&[...document.getElementById('f-listed').options].some(o=>o.value===a.listed))document.getElementById('f-listed').value=a.listed;if(a.ma)document.getElementById('f-ma').value=a.ma;const map={ms3:'scale',ms4:'position',ms5:'years',ms6:'capital',ms7:'employees',ms8:'hiring',ms10:'region'};Object.keys(map).forEach(id=>{const vals=a[map[id]]||[];document.querySelectorAll('#'+id+'-drop input[type=checkbox]').forEach(c=>{c.checked=vals.includes(c.value);});updateMs(id,null);});}
+function loadAnswers(){try{const saved=localStorage.getItem('jssa_answers');if(!saved)return;const a=JSON.parse(saved);applySurvey(a);applyOptional(a);}catch(e){console.error('loadAnswers error:',e);}}
 function logout(){if(!confirm('ログアウトしますか？'))return;sessionStorage.clear();window.location.href='/login';}
 fetch('/.netlify/functions/counter',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.count)document.getElementById('counter-val').textContent=Number(d.count).toLocaleString();}).catch(()=>{});
 
@@ -371,6 +436,19 @@ async function loadUserStatus(){
         remEl.textContent=`今月のリクエスト回数を使い切りました。翌月1日に回数が追加されると、再度お申し込みいただけます`;
       }
     }
+    // 前回の回答があれば表示して、編集できるようにする（申し込むと新しい条件で再マッチング）
+    const last=data.lastSurvey;
+    if(last&&last.answers){
+      const a=last.answers;
+      if(a.attribute||a.industryDetail){applySurvey(a);}
+      applyOptional(a);
+      const d=last.createdAt?new Date(new Date(last.createdAt).getTime()+9*3600*1000).toISOString().slice(0,10).replace(/-/g,'/'):'';
+      const note=document.getElementById('last-note');
+      note.innerHTML=(a.attribute||a.industryDetail)
+        ?`前回${d?`（${d}）`:''}の回答を表示しています。内容を変更して「マッチングを申し込む」を押すと、新しい条件で再マッチングします。`
+        :`アンケートの設問が新しくなりました。お手数ですが①〜④にご回答ください。前回の任意項目は引き継いでいます。`;
+      note.style.display='block';
+    }
     if(submitBtn&&data.remaining<=0){
       submitBtn.disabled=true;
       submitBtn.textContent='現在お申し込みいただけません（リクエスト回数の上限到達）';
@@ -379,6 +457,7 @@ async function loadUserStatus(){
 }
 
 if(currentUser.name){document.getElementById('user-name').textContent=currentUser.name;}
+buildSurvey();
 loadAnswers();
 loadUserStatus();
 </script>

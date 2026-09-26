@@ -127,6 +127,8 @@ textarea:focus{border-color:#639922}
 .mem-table th{background:#f9fafb;font-weight:700;color:#4b5563}
 .mem-row{cursor:pointer}.mem-row:hover td{background:#f9fafb}
 .mem-detail td{background:#f9fafb;color:#4b5563}
+.mt{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:10px;margin:2px 2px 2px 0}
+.mt.ok{background:#DCFCE7;color:#166534}.mt.ng{background:#FEE2E2;color:#991B1B}.mt.na{background:#F3F4F6;color:#6B7280}
 </style>
 </head>
 <body>
@@ -502,6 +504,17 @@ function renderEnrichPanel(){
     <div class="enrich-summary" id="dup-summary"></div>
     <div class="enrich-log" id="dup-log" style="margin-bottom:28px"></div>
 
+    <h3>属性・業種詳細のAI分類</h3>
+    <p class="enrich-lead">マッチングアンケートの「①会いたい相手の属性」「②希望する業種・領域」で照合できるよう、名刺データの会社をAIで分類し、AJ列（属性）とAK列（業種詳細）に書き込みます。会社単位で処理し、同じ会社の名刺にはすべて同じ分類が入ります。<br>初回は全社（約6,900社）が対象で、20社ずつ処理します。名刺を追加したときは、AI情報補完のあとにこちらも実行してください。</p>
+    <div class="enrich-actions">
+      <button onclick="findUnclassified()">未分類の会社を探す</button>
+      <button class="primary" id="cls-start" onclick="startClassify()" disabled>分類を開始</button>
+      <button id="cls-stop" onclick="clsStop=true" disabled>停止</button>
+    </div>
+    <div class="enrich-summary" id="cls-summary"></div>
+    <div class="enrich-bar"><div id="cls-bar"></div></div>
+    <div class="enrich-log" id="cls-log" style="margin-bottom:28px"></div>
+
     <h3>名刺データの企業情報をAIで補完</h3>
     <p class="enrich-lead">「名刺データ」シートで、会社名があり業種（O列）が空の行を探し、AIが業種・企業規模・従業員数・設立年・資本金・上場市場・採用人数・M&amp;A実績・企業特徴（O〜W列）を書き込みます。名刺に住所（G列）やURL（M列）が無い場合は、それも調べて書き込みます（郵便番号がわかればF列にも）。<br>新しく追加した名刺だけを対象にする場合は、追加した行の範囲を指定してください。1社あたり10〜25秒ほどかかります。</p>
     <div class="enrich-range">
@@ -550,6 +563,55 @@ async function mergeDuplicates(){
     document.getElementById('dup-log').innerHTML='';
     enrichTargets=[];document.getElementById('enrich-start').disabled=true;document.getElementById('enrich-log').innerHTML='';
   }catch(e){sum.textContent='エラー：'+e.message;}
+}
+let clsTargets=[],clsRunning=false,clsStop=false;
+async function findUnclassified(){
+  const sum=document.getElementById('cls-summary');sum.textContent='名刺データを確認しています…';
+  try{
+    const res=await fetch('/.netlify/functions/collect-company-info',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'findUnclassified'})});
+    const data=await res.json();
+    if(!data.success){sum.textContent='エラー：'+(data.error||'確認できませんでした');return;}
+    clsTargets=data.targets||[];
+    sum.innerHTML=clsTargets.length?`未分類の会社：<b>${clsTargets.length}社</b>（全${data.totalCompanies}社中）。20社ずつ、2つ同時に処理します。`:`すべての会社（${data.totalCompanies}社）が分類済みです。`;
+    document.getElementById('cls-start').disabled=!clsTargets.length;
+  }catch(e){sum.textContent='エラー：'+e.message;}
+}
+async function classifyChunk(names){
+  for(let t=0;t<2;t++){
+    try{
+      const res=await fetch('/.netlify/functions/collect-company-info',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'classify',companies:names})});
+      const text=await res.text();const data=JSON.parse(text);
+      if(data.success)return data.results;
+    }catch(e){}
+  }
+  return null;
+}
+async function startClassify(){
+  if(!clsTargets.length)return;
+  if(!confirm(`${clsTargets.length}社をAIで分類します。時間がかかるので、終わるまでこの画面を開いたままにしてください。よろしいですか？`))return;
+  clsRunning=true;clsStop=false;
+  document.getElementById('cls-start').disabled=true;document.getElementById('cls-stop').disabled=false;
+  const sum=document.getElementById('cls-summary');const log=document.getElementById('cls-log');
+  const chunks=[];for(let i=0;i<clsTargets.length;i+=20)chunks.push(clsTargets.slice(i,i+20));
+  let done=0,failed=0;const counts={};
+  log.innerHTML='<table><thead><tr><th>会社</th><th>属性</th><th>業種詳細</th></tr></thead><tbody id="cls-tbody"></tbody></table>';
+  const tbody=document.getElementById('cls-tbody');
+  for(let i=0;i<chunks.length;i+=2){
+    if(clsStop)break;
+    const pair=chunks.slice(i,i+2);
+    const results=await Promise.all(pair.map(classifyChunk));
+    results.forEach((r,k)=>{
+      if(!r){failed+=pair[k].length;return;}
+      r.forEach(x=>{counts[x.attribute]=(counts[x.attribute]||0)+1;});
+      tbody.insertAdjacentHTML('afterbegin',r.map(x=>`<tr><td>${enrichEsc(x.company)}</td><td>${enrichEsc(x.attribute)}</td><td>${enrichEsc((x.industries||[]).join('／'))}</td></tr>`).join(''));
+    });
+    done+=pair.reduce((a,c)=>a+c.length,0);
+    while(tbody.children.length>200)tbody.removeChild(tbody.lastChild);
+    document.getElementById('cls-bar').style.width=(done/clsTargets.length*100)+'%';
+    sum.innerHTML=`${done} / ${clsTargets.length}社を処理（失敗 ${failed}社）`;
+  }
+  clsRunning=false;document.getElementById('cls-stop').disabled=true;
+  sum.innerHTML=`${clsStop?'停止しました':'完了しました'}：${done-failed}社を分類（失敗 ${failed}社）。<br>属性の内訳：${Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${enrichEsc(k)} ${v}社`).join('、')}<br>失敗した会社や停止した残りは、もう一度「未分類の会社を探す」から再実行できます。`;
 }
 async function findEnrichTargets(){
   const sum=document.getElementById('enrich-summary');
@@ -683,8 +745,8 @@ function renderCards(){
         const shown=showAll?members:members.slice(0,5);
         const rowsHtml=shown.map(m=>{
           const did=`md-${b.batchId}-${m.rowIndex}`;
-          return `<tr class="mem-row" onclick="toggleMemberDetail('${did}')"><td>${m.department||'-'}</td><td>${m.position||'-'}</td><td>${m.name||'-'}</td><td>${formatCardDate(m.cardDate)}</td></tr>
-          <tr id="${did}" class="mem-detail" style="display:none"><td colspan="4"><b>メール:</b> ${m.email||'-'}　<b>電話:</b> ${m.telOffice||m.telDirect||m.mobile||'-'}<br><b>住所:</b> ${(m.zip?m.zip+' ':'')}${m.address||'-'}${!m.found?'<br><span style="color:#991b1b">⚠️ 名刺データが見つかりませんでした（削除・変更された可能性）</span>':''}</td></tr>`;
+          return `<tr class="mem-row" onclick="toggleMemberDetail('${did}')"><td>${m.department||'-'}</td><td>${m.position||'-'}</td><td>${m.name||'-'}</td><td>${formatCardDate(m.cardDate)}</td><td>${m.matchInfo?(m.matchInfo.departmentMatch?'<span class="mt ok">✓</span>':m.matchInfo.departmentMatch===false?'<span class="mt ng">✕</span>':'－'):'－'}</td></tr>
+          <tr id="${did}" class="mem-detail" style="display:none"><td colspan="5"><b>メール:</b> ${m.email||'-'}　<b>電話:</b> ${m.telOffice||m.telDirect||m.mobile||'-'}<br><b>住所:</b> ${(m.zip?m.zip+' ':'')}${m.address||'-'}${!m.found?'<br><span style="color:#991b1b">⚠️ 名刺データが見つかりませんでした（削除・変更された可能性）</span>':''}</td></tr>`;
         }).join('');
         const moreBtn=members.length>5?`<button class="sel-btn" style="margin-top:6px" onclick="toggleGroupExpand('${b.batchId}','${g.key.replace(/'/g,"\\'")}')">${showAll?'最新の5名だけ表示':`他${members.length-5}名を表示`}</button>`:'';
         return `<div class="company-card">
@@ -695,13 +757,19 @@ function renderCards(){
           </div>
           <div class="company-card-body">
             <div class="cc-row"><span><b>業種:</b> ${c.industry||'-'}</span><span><b>従業員数:</b> ${c.employees||'-'}</span><span><b>設立:</b> ${c.founded||'-'}</span><span><b>資本金:</b> ${c.capital||'-'}</span><span><b>上場:</b> ${c.listed||'未上場'}</span></div>
+            ${(()=>{const mi=members.map(m=>m.matchInfo).filter(Boolean);if(!mi.length)return '';
+              const mark=(v,label)=>v===true?`<span class="mt ok">✓ ${label}</span>`:v===false?`<span class="mt ng">✕ ${label}</span>`:`<span class="mt na">－ ${label}（未判定）</span>`;
+              const first=mi[0];const pur=[...new Set(mi.flatMap(x=>x.purposes||[]))];const dep=[...new Set(mi.flatMap(x=>x.departments||[]))];const depN=mi.filter(x=>x.departmentMatch).length;
+              const sv=b.aiParams||{};const anyD=(sv.departments||[]).includes('こだわらない');
+              return `<div class="cc-row" style="margin:4px 0 2px"><span style="font-size:12px"><b>一致した条件:</b> ${mark(first.attribute,'①属性')} ${mark(first.industry,'②業種・領域')} ${pur.length?`<span class="mt ok">✓ ③目的（${pur.join('、')}）</span>`:'<span class="mt ng">✕ ③目的</span>'} ${anyD?'<span class="mt na">－ ④部署（こだわらない）</span>':depN?`<span class="mt ok">✓ ④部署（${dep.join('、')}／${depN}名）</span>`:'<span class="mt ng">✕ ④部署</span>'}</span></div>`;})()}
+            ${c.attribute||c.industryDetail?`<div class="cc-row"><span><b>属性:</b> ${c.attribute||'未分類'}</span><span><b>業種詳細:</b> ${c.industryDetail||'未分類'}</span></div>`:''}
             <div class="cc-row"><span><b>サイト:</b> ${c.siteUrl?`<a href="${c.siteUrl}" target="_blank" rel="noopener">${c.siteUrl}</a>`:'-'}</span></div>
             <div style="margin-top:6px"><b>会社概要:</b> ${c.features||'情報なし'}</div>
             ${c.matchReason?`<div style="margin-top:4px"><b>マッチ理由:</b> ${c.matchReason}</div>`:''}
             ${c.meetingBenefit?`<div style="margin-top:4px"><b>面談メリット:</b> ${c.meetingBenefit}</div>`:''}
             ${c.recommendation?`<div class="reason-box">🎯 <b>推薦理由:</b> ${c.recommendation}</div>`:''}
             <div style="font-size:12px;color:#6b7280;margin:10px 0 4px">社員一覧（名刺交換日の新しい順・行をクリックで連絡先を表示）</div>
-            <div style="overflow-x:auto"><table class="mem-table"><thead><tr><th>部署</th><th>役職</th><th>担当者名</th><th>名刺交換日</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+            <div style="overflow-x:auto"><table class="mem-table"><thead><tr><th>部署</th><th>役職</th><th>担当者名</th><th>名刺交換日</th><th>部署一致</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
             ${moreBtn}
           </div>
         </div>`;
@@ -746,8 +814,14 @@ function renderCards(){
         const v=ap[k];const t=Array.isArray(v)?v.filter(Boolean).join('、'):String(v||'').trim();
         return t?t:'<span style="color:#9ca3af">無回答</span>';
       };
-      const surveyItems=[['① 業種','industry'],['② 上場/未上場','listed'],['③ 企業規模','scale'],['④ 役職クラス','position'],['⑤ 設立年数','years',1],['⑥ 資本金','capital',1],['⑦ 従業員数','employees',1],['⑧ 年間採用人数','hiring',1],['⑨ M&A実績','ma',1],['⑩ 地域','region']];
-      const surveyHtml=`<div class="applicant-profile" style="background:#f9fafb;border-color:#e5e7eb"><div class="ap-title">📝 マッチングアンケートの回答</div><div class="ap-row">${surveyItems.map(([label,k,opt])=>`<span><b>${label}:</b> ${ansVal(k,opt)}</span>`).join('')}</div></div>`;
+      const isNewSv=!!(ap.attribute||ap.industryDetail||(ap.purposes||[]).length||(ap.departments||[]).length);
+      const OTHERV='その他（自由記入）';
+      const withOther=(v,o)=>{const arr=(Array.isArray(v)?v:[v]).filter(Boolean);if(!arr.length)return '<span style="color:#9ca3af">無回答</span>';return arr.map(x=>x===OTHERV?`その他：${(o||'').replace(/</g,'&lt;')||'（未記入）'}`:x).join('、');};
+      const surveyItems=isNewSv
+        ?[['⑤ 上場/未上場','listed'],['⑥ 企業規模','scale'],['⑦ 役職クラス','position'],['⑧ 設立年数','years'],['⑨ 資本金','capital'],['⑩ 従業員数','employees'],['⑪ 年間採用人数','hiring'],['⑫ M&A実績','ma'],['⑬ 地域','region']]
+        :[['① 業種','industry'],['② 上場/未上場','listed'],['③ 企業規模','scale'],['④ 役職クラス','position'],['⑤ 設立年数','years',1],['⑥ 資本金','capital',1],['⑦ 従業員数','employees',1],['⑧ 年間採用人数','hiring',1],['⑨ M&A実績','ma',1],['⑩ 地域','region']];
+      const reqSurveyHtml=isNewSv?`<div class="ap-row" style="margin-bottom:6px"><span><b>① 会いたい相手の属性:</b> ${withOther(ap.attribute,ap.attributeOther)}</span><span><b>② 希望する業種・領域:</b> ${withOther(ap.industryDetail,ap.industryOther)}</span><span><b>③ 面談の目的:</b> ${withOther(ap.purposes,ap.purposeOther)}</span><span><b>④ 会いたい部署・担当者:</b> ${withOther(ap.departments,ap.departmentOther)}</span></div>`:'';
+      const surveyHtml=`<div class="applicant-profile" style="background:#f9fafb;border-color:#e5e7eb"><div class="ap-title">📝 マッチングアンケートの回答${isNewSv?'':'（旧形式）'}</div>${reqSurveyHtml}<div class="ap-row"${isNewSv?' style="font-size:11px;color:#6b7280"':''}>${surveyItems.map(([label,k,opt])=>`<span><b>${label}:</b> ${ansVal(k,opt)}</span>`).join('')}</div></div>`;
       return `<div class="card">
         <div class="card-head">
           <div><div class="card-title">${b.userCompany||'—'} ${b.userName||''}</div><div class="card-sub">${b.userEmail||''} | ${jstDate(b.createdAt)} | ${jstTime(b.createdAt)} | ${totalCount}社マッチ</div></div>

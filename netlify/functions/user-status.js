@@ -1,4 +1,4 @@
-const{getUserBalance,MONTHLY_LIMITS}=require('./sheets-helper');
+const{getUserBalance,MONTHLY_LIMITS,getLastSurvey}=require('./sheets-helper');
 
 exports.handler=async(event)=>{
   if(event.httpMethod==='OPTIONS')return{statusCode:200,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type'},body:''};
@@ -9,9 +9,9 @@ exports.handler=async(event)=>{
     if(!userId)return{statusCode:400,headers,body:JSON.stringify({error:'userId is required'})};
     const rank=memberRank||'default';
     const limit=MONTHLY_LIMITS[rank]||MONTHLY_LIMITS['default'];
-    const balance=await getUserBalance(userId,limit);
+    const[balance,last]=await Promise.all([getUserBalance(userId,limit),getLastSurvey(userId)]);
     const remaining=Math.max(balance,0);
-    return{statusCode:200,headers,body:JSON.stringify({success:true,memberRank:rank,limit,remaining})};
+    return{statusCode:200,headers,body:JSON.stringify({success:true,memberRank:rank,limit,remaining,lastSurvey:last})};
   }catch(e){
     return{statusCode:500,headers,body:JSON.stringify({error:e.message})};
   }

@@ -1,3 +1,4 @@
+const RULES=require('./survey-rules');
 const{getParticipants,setUserBalance,MONTHLY_LIMITS,personKey,isNewerCard,changeRequestBalance,getPriorityLists,priorityTier,getIntroducedCompanies,cardTime}=require('./sheets-helper');
 const RESEND_API_KEY=process.env.RESEND_API_KEY;
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
@@ -247,7 +248,10 @@ exports.handler=async(event)=>{
           email:row[4]||'',zip:row[5]||'',address:row[6]||'',telOffice:row[7]||'',telDept:row[8]||'',
           telDirect:row[9]||'',fax:row[10]||'',mobile:row[11]||'',siteUrl:row[12]||'',cardDate:row[13]||'',
           industry:row[14]||'',scale:row[15]||'',employees:row[16]||'',founded:row[17]||'',capital:row[18]||'',
-          listed:row[19]||'',hiring:row[20]||'',ma:row[21]||'',features:row[22]||'',facebook:row[23]||''
+          listed:row[19]||'',hiring:row[20]||'',ma:row[21]||'',features:row[22]||'',facebook:row[23]||'',
+          attribute:row[35]||'',industryDetail:row[36]||'',
+          // 新アンケートの回答と、この名刺のどの条件が一致したか
+          matchInfo:RULES.isNewSurvey(aiParams||{})?RULES.evaluateCard(aiParams||{},{company:row[0],attribute:row[35],industryDetail:row[36],department:row[1],position:row[2],features:row[22]}):null
         };
       });
       let enriched=results.map(r=>({...r,matchReason:'',recommendation:'',meetingBenefit:''}));
@@ -268,7 +272,7 @@ exports.handler=async(event)=>{
           const uniq=[];const idxOf=new Map();
           results.forEach(r=>{const k=normCo2(r.company);if(!idxOf.has(k)){idxOf.set(k,uniq.length);uniq.push(r);}});
           const list=uniq.map((r,i)=>`${i+1}. ${r.company}（${r.industry||'業種不明'}・${r.address||'地域不明'}・スコア${r.score}%）\n特徴：${r.features||'情報なし'}`).join('\n\n');
-          const prompt=`あなたはJSSAエコシステムマッチングツールのAIアシスタントです。\n以下の企業リストについて、それぞれ次の3つを日本語で生成してください。\n\nアンケート回答：\n- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n${appDetails?`\n申込者の情報：${appDetails}\n`:''}\n企業リスト：\n${list}\n\n① matchReason：マッチ理由（50文字以内）\n② recommendation：推薦理由（150文字以内）\n③ meetingBenefit：この企業（リストの各社）から見て、申込者と面談することのメリット（150文字程度、企業側の立場で前向きになれる具体的な内容）\n\n以下のJSON配列形式のみで回答してください（企業リストと同じ順番・同じ件数で）：\n[{"matchReason":"...","recommendation":"...","meetingBenefit":"..."}]`;
+          const prompt=`あなたはJSSAエコシステムマッチングツールのAIアシスタントです。\n以下の企業リストについて、それぞれ次の3つを日本語で生成してください。\n\nアンケート回答：\n${RULES.isNewSurvey(ap)?`- 会いたい相手の属性：${ap.attribute===RULES.OTHER?ap.attributeOther:ap.attribute}\n- 希望する業種・領域：${ap.industryDetail===RULES.OTHER?ap.industryOther:ap.industryDetail}\n- 面談の目的：${(ap.purposes||[]).map(p=>p===RULES.OTHER?ap.purposeOther:p).join('、')}\n- 会いたい部署・担当者：${(ap.departments||[]).map(p=>p===RULES.OTHER?ap.departmentOther:p).join('、')}\n`:`- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n`}- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n${appDetails?`\n申込者の情報：${appDetails}\n`:''}\n企業リスト：\n${list}\n\n① matchReason：マッチ理由（50文字以内）\n② recommendation：推薦理由（150文字以内）\n③ meetingBenefit：この企業（リストの各社）から見て、申込者と面談することのメリット（150文字程度、企業側の立場で前向きになれる具体的な内容）\n\n以下のJSON配列形式のみで回答してください（企業リストと同じ順番・同じ件数で）：\n[{"matchReason":"...","recommendation":"...","meetingBenefit":"..."}]`;
           const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:3000,messages:[{role:'user',content:prompt}]})});
           const aiData=await aiRes.json();
           if(!aiRes.ok){

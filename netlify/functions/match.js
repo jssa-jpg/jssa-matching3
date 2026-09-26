@@ -1,3 +1,4 @@
+const RULES=require('./survey-rules');
 const{getParticipants,getIntroducedCompanies,saveMatchResultsForReview,cardTime,getPriorityLists,priorityTier}=require('./sheets-helper');
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const rateLimit=new Map();
@@ -160,6 +161,8 @@ try{
 const body=JSON.parse(event.body);
 const isOld=!!(body.company||body.name)&&!body.answers&&!body.userInfo;
 let industry,listed,scale,position,years,capital,employees,hiring,ma,region,userId;
+// 新アンケート（①属性 ②業種・領域 ③面談の目的 ④会いたい部署）
+let nv={attribute:'',attributeOther:'',industryDetail:'',industryOther:'',purposes:[],purposeOther:'',departments:[],departmentOther:''};
 if(isOld){
 industry=Array.isArray(body.industries)?body.industries:[];
 listed=body.wantListingStatus||"";
@@ -181,6 +184,9 @@ hiring=Array.isArray(ans.hiring)?ans.hiring:[];
 ma=ans.ma||"";
 region=Array.isArray(ans.region)?ans.region:[];
 userId=ui.id||ui.company||"";
+nv={attribute:String(ans.attribute||''),attributeOther:String(ans.attributeOther||'').trim(),industryDetail:String(ans.industryDetail||''),industryOther:String(ans.industryOther||'').trim(),
+  purposes:Array.isArray(ans.purposes)?ans.purposes.slice(0,2):[],purposeOther:String(ans.purposeOther||'').trim(),
+  departments:Array.isArray(ans.departments)?ans.departments.slice(0,3):[],departmentOther:String(ans.departmentOther||'').trim()};
 }
 const all=await getParticipants();
 const exc=new Set();
@@ -201,8 +207,11 @@ if(companySearch){
   return{statusCode:200,headers,body:JSON.stringify({success:true,submitted:true,count:matched.length})};
 }
 
+const useNew=RULES.isNewSurvey(nv);
 const cands=all.filter(p=>{
 if(!p||!p.company)return false;
+// ①属性はAI分類済みの名刺だけ絞り込む（未分類の名刺は点数を低くして残す）
+if(useNew&&nv.attribute&&nv.attribute!==RULES.ANY&&nv.attribute!==RULES.OTHER&&RULES.ATTRIBUTES.includes(p.attribute)&&p.attribute!==nv.attribute)return false;
 if(exc.has(normCo(p.company)))return false;
 const pl=p.listingStatus==="上場企業";
 if(listed==="上場企業のみ"&&!pl)return false;
@@ -226,7 +235,8 @@ const hasFilter=(industry.length>0&&!industry.includes('こだわらない'))||
   (employees.length>0&&!employees.includes('こだわらない'))||
   (hiring.length>0&&!hiring.includes('こだわらない'))||
   (ma&&ma!=='こだわらない')||
-  (region.length>0&&!region.includes('こだわらない'));
+  (region.length>0&&!region.includes('こだわらない'))||
+  (useNew&&!!nv.attribute&&nv.attribute!==RULES.ANY);
 if(hasFilter&&(!p.siteUrl||p.siteUrl==='不明'||p.siteUrl===''))return false;
 return true;
 });
@@ -243,7 +253,15 @@ if(employees.length>0&&employees[0]!=='こだわらない')s+=3;
 if(hiring.length>0&&hiring[0]!=='こだわらない')s+=3;
 if(years.length>0&&years[0]!=='こだわらない')s+=3;
 if(region.length>0&&pf){for(let j=0;j<region.length;j++){const r=region[j];if(!r)continue;let m=false;if(r==="東京都のみ"&&pf.startsWith("東京都"))m=true;if(r==="関東"&&(pf.startsWith("東京都")||pf.startsWith("神奈川県")||pf.startsWith("埼玉県")||pf.startsWith("千葉県")))m=true;if(r==="関西"&&(pf.startsWith("大阪府")||pf.startsWith("兵庫県")||pf.startsWith("京都府")))m=true;if(r==="北海道"&&pf.startsWith("北海道"))m=true;if(r==="九州・沖縄"&&(pf.startsWith("福岡県")||pf.startsWith("沖縄県")))m=true;if(m){s+=10;break;}}}
-const pct=Math.min(Math.round((s/150)*100),99);
+let pct=Math.min(Math.round((s/150)*100),99);
+if(useNew){
+  // 新アンケート：①属性40点・②業種30点・④部署20点・③目的10点×2＋任意項目
+  const ev=RULES.evaluateCard(nv,p);
+  let s2=ev.score;
+  if(scale.length>0&&!scale.includes('こだわらない')&&ps&&scale.includes(ps))s2+=5;
+  if(region.length>0&&!region.includes('こだわらない')&&regionMatch(region,pf))s2+=10;
+  pct=Math.min(Math.round((s2/(RULES.MAX_SCORE+15))*100),99);
+}
 scored.push({id:p.id||"",cardRow:p.cardRow||0,company:p.company||"",department:p.department||"",position:pp,industry:pi,scale:ps,prefecture:pf,listed:p.listed||"",employees:p.employees||"",founded:p.founded||"",capital:p.capital||"",hiring:p.hiring||"",ma:pm,features:p.features||"",siteUrl:p.siteUrl||"",score:pct,matchReason:"",recommendation:"",firstMessage:""});
 }
 // マッチ度が同じ場合は、名刺交換日が一番新しい社員がいる会社を優先。同じ会社のメンバーはまとめて並べ、その中は名刺交換日の新しい順
@@ -270,7 +288,7 @@ const top100=scored.filter(m=>topCompanies.has(coKey(m.company)));
 // 企業名のみをメールで通知するフローに変更。
 const ui=body.userInfo||{};
 // 管理画面でアンケートの全回答を確認できるよう、任意項目も含めて保存する
-const aiParams={industry,listed,scale,position,region,years,capital,employees,hiring,ma};
+const aiParams={industry,listed,scale,position,region,years,capital,employees,hiring,ma,...nv};
 try{
   await saveMatchResultsForReview(userId,ui,top100.map(m=>({company:m.company,score:m.score,cardRow:m.cardRow})),aiParams);
 }catch(e){console.error('saveMatchResultsForReview error:',e.message);}
