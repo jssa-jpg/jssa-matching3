@@ -131,12 +131,25 @@ exports.handler=async(event)=>{
           try{aiParams=JSON.parse(it.aiParamsJson||'{}');}catch(e){aiParams={};}
           batches[it.batchId]={batchId:it.batchId,createdAt:it.createdAt,userId:it.userId,userCompany:it.userCompany,userName:it.userName,userEmail:it.userEmail,status:it.status,aiParams,memberRank:it.memberRank,userProfile:userMap[it.userId]||null,companies:[]};
         }
+        // 岡代表が「候補から外す」を押した企業は表示しない
+        if(it.status==='除外')continue;
         batches[it.batchId].companies.push({rowIndex:it.rowIndex,targetCompany:it.targetCompany,score:it.score,status:it.status,cardRow:it.cardRow});
         // バッチ全体のステータスは「1件でも未通知があれば未通知」とする
         if(it.status==='未通知')batches[it.batchId].status='未通知';
       }
       const list=Object.values(batches).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
       return{statusCode:200,headers,body:JSON.stringify({success:true,batches:list})};
+    }
+
+    if(action==='excludeCompanies'){
+      // マッチング結果から、ふさわしくない企業を候補から外す（行は消さずにステータスを「除外」にする）
+      const{rowIndexes}=body;
+      if(!Array.isArray(rowIndexes)||rowIndexes.length===0)return{statusCode:400,headers,body:JSON.stringify({error:'対象がありません'})};
+      const id=process.env.GOOGLE_SHEET_ID;
+      const data=rowIndexes.map(r=>({range:`マッチング結果!I${parseInt(r,10)}`,values:[['除外']]}));
+      const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values:batchUpdate`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data})});
+      if(!res.ok)return{statusCode:500,headers,body:JSON.stringify({error:'更新に失敗しました'})};
+      return{statusCode:200,headers,body:JSON.stringify({success:true})};
     }
 
     if(action==='getCompanyDetails'){

@@ -261,6 +261,22 @@ function toggleGroupSelect(batchId,groupKey,checked){
   const el=document.getElementById(`selcount-${batchId}`);
   if(el)el.textContent=`${selectedGroupCount(batchId)}社を選択中`;
 }
+async function excludeGroup(batchId,groupKey){
+  const batch=matchBatches.find(b=>b.batchId===batchId);if(!batch)return;
+  const items=(batch.companies||[]).filter(it=>coNorm(it.targetCompany)===groupKey);
+  if(!items.length)return;
+  if(!confirm(`「${items[0].targetCompany}」を候補から外しますか？\nこの会員の次回以降のマッチングにも表示されなくなります。`))return;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'excludeCompanies',rowIndexes:items.map(it=>it.rowIndex)})});
+    const data=await res.json();
+    if(!data.success){alert(data.error||'処理に失敗しました');return;}
+    const rows=new Set(items.map(it=>it.rowIndex));
+    batch.companies=batch.companies.filter(it=>!rows.has(it.rowIndex));
+    loadedDetails[batchId]=(loadedDetails[batchId]||[]).filter(c=>!rows.has(c.rowIndex));
+    if(selectedCompanies[batchId])rows.forEach(r=>selectedCompanies[batchId].delete(r));
+    renderCards();
+  }catch(e){alert('エラー: '+e.message);}
+}
 function toggleGroupExpand(batchId,groupKey){const k=`${batchId}|${groupKey}`;expandedGroups[k]=!expandedGroups[k];renderCards();}
 function toggleMemberDetail(id){const e=document.getElementById(id);if(e)e.style.display=e.style.display==='none'?'':'none';}
 
@@ -594,6 +610,7 @@ function renderCards(){
         return `<div class="company-card">
           <div class="company-card-head">
             <input type="checkbox" id="${cid}" ${checked} onchange="toggleGroupSelect('${b.batchId}','${g.key.replace(/'/g,"\\'")}',this.checked)">
+            <button type="button" class="sel-btn" style="margin-left:auto;order:3;color:#991b1b;border-color:#fca5a5;font-size:11px;padding:3px 10px" onclick="excludeGroup('${b.batchId}','${g.key.replace(/'/g,"\\'")}')">候補から外す</button>
             <label for="${cid}" class="company-card-name">${c.company||'（企業名不明）'}${score?`（マッチ度${score}%）`:''}${tierBadge(c.tier)}${members.length>1?` <span style="background:#E6F1FB;color:#0C447C;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">社員${members.length}名</span>`:''}</label>
           </div>
           <div class="company-card-body">

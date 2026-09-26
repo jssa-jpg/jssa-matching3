@@ -453,7 +453,8 @@ async function getIntroducedCompanies(userId) {
     const rows = data.values || [];
     // 列: A=バッチID, C=ユーザーID, G=マッチ企業名, I=ステータス
     return [...new Set(rows.slice(1)
-      .filter(r => String(r[2] || '') === String(userId) && r[8] === '企業名送信済み')
+      // 案内済みの企業に加え、岡代表が「候補から外す」にした企業も、次回以降の候補から除外する
+      .filter(r => String(r[2] || '') === String(userId) && (r[8] === '企業名送信済み' || r[8] === '除外'))
       .map(r => r[6])
       .filter(Boolean))];
   } catch (e) {
