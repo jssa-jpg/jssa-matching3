@@ -267,7 +267,41 @@ async function searchBatch(batchId){
   }catch(e){alert('エラー: '+e.message);}
   renderCards();
 }
-function clearBatchSearch(batchId){delete batchFilters[batchId];renderCards();}
+function clearBatchSearch(batchId){delete batchFilters[batchId];delete allSearch[batchId];renderCards();}
+
+// ===== 名刺データ全体から検索して、候補に追加する =====
+let allSearch={}; // batchId -> {query,total,companies,selected:Set}
+async function searchAllCards(batchId){
+  const batch=matchBatches.find(b=>b.batchId===batchId);if(!batch)return;
+  const input=document.getElementById(`search-${batchId}`);const q=(input?input.value:'').trim();
+  if(!q){alert('検索キーワードを入力してください');return;}
+  const btn=document.getElementById(`searchallbtn-${batchId}`);if(btn){btn.disabled=true;btn.textContent='検索中…';}
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'searchAllCards',keywords:q.split(/[\s　]+/),userId:batch.userId,batchId})});
+    const data=await res.json();
+    if(!data.success)alert(data.error||'検索に失敗しました');
+    else allSearch[batchId]={query:q,total:data.total,companies:data.companies,selected:new Set()};
+  }catch(e){alert('エラー: '+e.message);}
+  renderCards();
+}
+function toggleAllSearchPick(batchId,idx,checked){const s=allSearch[batchId];if(!s)return;checked?s.selected.add(idx):s.selected.delete(idx);const el=document.getElementById(`allpickcount-${batchId}`);if(el)el.textContent=`${s.selected.size}社を選択中`;}
+async function addPickedToBatch(batchId){
+  const s=allSearch[batchId];if(!s||!s.selected.size){alert('追加する会社を選んでください');return;}
+  const names=[...s.selected].map(i=>s.companies[i].company);
+  const btn=document.getElementById(`addpicked-${batchId}`);if(btn){btn.disabled=true;btn.textContent='追加中…';}
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'addToBatch',batchId,companies:names})});
+    const data=await res.json();
+    if(!data.success){alert(data.error||'追加に失敗しました');if(btn){btn.disabled=false;btn.textContent='選んだ会社を候補に追加';}return;}
+    delete allSearch[batchId];
+    await loadMatchResults();
+    const batch=matchBatches.find(b=>b.batchId===batchId);
+    const keys=new Set(names.map(coNorm));
+    if(batch)batchFilters[batchId]={query:`追加した${names.length}社`,rows:new Set(batch.companies.filter(it=>keys.has(coNorm(it.targetCompany))).map(it=>it.rowIndex))};
+    renderCards();
+    const b2=document.getElementById(`loadmore-${batchId}`);if(b2)b2.click();
+  }catch(e){alert('エラー: '+e.message);}
+}
 function selectedGroupCount(batchId){
   const batch=matchBatches.find(b=>b.batchId===batchId);const sel=selectedCompanies[batchId]||new Set();
   if(!batch)return 0;return batchGroups(batch).filter(g=>g.items.some(it=>sel.has(it.rowIndex))).length;
@@ -575,6 +609,7 @@ async function startEnrich(){
 function formatCardDate(v){
   const s=String(v||'').normalize('NFKC').trim();
   if(!s)return '未登録';
+  if(/^#+$/.test(s))return '要確認（シートの値が「###」）';
   const m=s.match(/(\d{4})\D+(\d{1,2})(?:\D+(\d{1,2}))?/);
   if(m)return `${m[1]}年${parseInt(m[2],10)}月${m[3]?parseInt(m[3],10)+'日':''}`;
   if(/^\d{5}$/.test(s)){const d=new Date(Date.UTC(1899,11,30)+parseInt(s,10)*86400000);return `${d.getUTCFullYear()}年${d.getUTCMonth()+1}月${d.getUTCDate()}日`;}
@@ -616,9 +651,20 @@ function renderCards(){
       const loadedGroups=visGroups.filter(g=>gmap.has(g.key)).map(g=>gmap.get(g.key));
       const hasMore=loadedGroups.length<visGroups.length;
       const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+      const as=allSearch[b.batchId];
+      const allSearchHtml=as?`<div style="border:1px solid #c7d2fe;background:#f5f7ff;border-radius:10px;padding:12px;margin:0 0 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <b style="font-size:13px">名刺データ全体の検索結果「${esc(as.query)}」：${as.total}社${as.total>as.companies.length?`（上位${as.companies.length}社を表示）`:''}</b>
+            <span id="allpickcount-${b.batchId}" style="font-size:12px;color:#4b5563">${as.selected.size}社を選択中</span>
+          </div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:6px">この会員に案内済み・除外済みの会社と、すでに候補にある会社は表示していません。</div>
+          ${as.companies.length?`<div style="max-height:420px;overflow:auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px">${as.companies.map((c,i)=>`<label style="display:flex;gap:8px;padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:12px;cursor:pointer"><input type="checkbox" ${as.selected.has(i)?'checked':''} onchange="toggleAllSearchPick('${b.batchId}',${i},this.checked)"><span><b>${esc(c.company)}</b>${c.tier===2?' <span style="background:#FEF3C7;color:#B45309;font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px">スポンサー</span>':c.tier===1?' <span style="background:#E0E7FF;color:#3730A3;font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px">協会顧問</span>':''}　<span style="color:#6b7280">${esc(c.industry||'業種不明')}／${esc(c.prefecture||'地域不明')}／社員${c.memberCount}名</span><br><span style="color:#4b5563">${c.sample.map(m=>esc([m.department,m.position,m.name].filter(Boolean).join(' '))).join('、')}</span>${c.features?`<br><span style="color:#6b7280">${esc(c.features)}…</span>`:''}</span></label>`).join('')}</div>
+          <div style="display:flex;gap:8px;margin-top:8px"><button class="btn-approve" id="addpicked-${b.batchId}" onclick="addPickedToBatch('${b.batchId}')">選んだ会社を候補に追加</button><button class="sel-btn" onclick="delete allSearch['${b.batchId}'];renderCards()">閉じる</button></div>`:'<div style="font-size:12px;color:#6b7280">該当する会社がありません。</div>'}
+        </div>`:'';
       const searchHtml=`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0">
-          <input id="search-${b.batchId}" type="text" value="${esc(filt?filt.query:'')}" placeholder="候補の中を検索（例：自治体　市役所 県庁）" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px" onkeydown="if(event.key==='Enter')searchBatch('${b.batchId}')">
-          <button class="sel-btn" id="searchbtn-${b.batchId}" onclick="searchBatch('${b.batchId}')">検索</button>
+          <input id="search-${b.batchId}" type="text" value="${esc(filt?filt.query:'')}" placeholder="キーワード（例：市役所 県庁 町役場）" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px" onkeydown="if(event.key==='Enter')searchBatch('${b.batchId}')">
+          <button class="sel-btn" id="searchbtn-${b.batchId}" onclick="searchBatch('${b.batchId}')">候補の中を検索</button>
+          <button class="sel-btn" id="searchallbtn-${b.batchId}" onclick="searchAllCards('${b.batchId}')">名刺データ全体から検索</button>
           ${filt?`<button class="sel-btn" onclick="clearBatchSearch('${b.batchId}')">検索を解除</button>`:''}
           ${filt?`<span style="font-size:12px;color:#4b5563">「${esc(filt.query)}」に該当：${visGroups.length}社（全${totalCount}社中）</span>`:''}
         </div>`;
@@ -710,6 +756,7 @@ function renderCards(){
         ${profileHtml}
         ${surveyHtml}
         ${searchHtml}
+        ${allSearchHtml}
         ${filt&&visGroups.length===0?'<div class="empty" style="padding:16px">該当する会社がありません。別のキーワードでお試しください。</div>':''}
         ${loadedGroups.length>0?`<div class="select-toolbar">
           <div class="sel-btns">

@@ -1,4 +1,4 @@
-const{getParticipants,setUserBalance,MONTHLY_LIMITS,personKey,isNewerCard,changeRequestBalance,getPriorityLists,priorityTier}=require('./sheets-helper');
+const{getParticipants,setUserBalance,MONTHLY_LIMITS,personKey,isNewerCard,changeRequestBalance,getPriorityLists,priorityTier,getIntroducedCompanies,cardTime}=require('./sheets-helper');
 const RESEND_API_KEY=process.env.RESEND_API_KEY;
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const OFFICE_EMAIL='tok@yumeplanning.jp';
@@ -161,6 +161,48 @@ exports.handler=async(event)=>{
         if(kws.some(kw=>text.includes(kw)))hitRows.push(it.rowIndex);
       }
       return{statusCode:200,headers,body:JSON.stringify({success:true,rowIndexes:hitRows})};
+    }
+
+    if(action==='searchAllCards'){
+      // 名刺データ全体から、会社名・部署・会社概要にキーワードを含む会社を探す（スペース区切りでOR検索）
+      // その会員に案内済み・除外済みの会社と、このマッチング結果にすでにある会社は除く
+      const{keywords,userId,batchId}=body;
+      const kws=(Array.isArray(keywords)?keywords:[]).map(k=>String(k||'').normalize('NFKC').trim().toLowerCase()).filter(Boolean);
+      if(!kws.length)return{statusCode:400,headers,body:JSON.stringify({error:'検索キーワードを入力してください'})};
+      const normC=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+      const skip=new Set();
+      if(userId){try{(await getIntroducedCompanies(userId)).forEach(c=>skip.add(normC(c)));}catch(e){}}
+      if(batchId){(await getSheet(token,'マッチング結果')).slice(1).forEach(r=>{if(r[0]===batchId)skip.add(normC(r[6]));});}
+      const participants=await getParticipants();
+      const priorityLists=await getPriorityLists();
+      const groups=new Map();
+      for(const p of participants){
+        const k=normC(p.company);if(!k||skip.has(k))continue;
+        const text=[p.company,p.department,p.features].map(v=>String(v||'')).join(' ').normalize('NFKC').toLowerCase();
+        if(!kws.some(kw=>text.includes(kw)))continue;
+        if(!groups.has(k))groups.set(k,{company:p.company,industry:p.industry||'',prefecture:p.prefecture||'',features:p.features||'',members:[],latest:0});
+        const g=groups.get(k);g.members.push({department:p.department||'',position:p.position||'',name:p.name||''});g.latest=Math.max(g.latest,cardTime(p.cardDate));
+      }
+      const list=[...groups.values()].map(g=>({...g,tier:priorityTier(g.company,priorityLists)}))
+        .sort((a,b)=>(b.tier-a.tier)||(b.latest-a.latest));
+      const LIMIT=100;
+      return{statusCode:200,headers,body:JSON.stringify({success:true,total:list.length,companies:list.slice(0,LIMIT).map(g=>({company:g.company,industry:g.industry,prefecture:g.prefecture,features:g.features.slice(0,120),memberCount:g.members.length,sample:g.members.slice(0,2),tier:g.tier}))})};
+    }
+
+    if(action==='addToBatch'){
+      // 全体検索で選んだ会社を、そのマッチング結果の候補に追加する（会社の社員全員分の行を追加）
+      const{batchId,companies}=body;
+      if(!batchId||!Array.isArray(companies)||!companies.length)return{statusCode:400,headers,body:JSON.stringify({error:'追加する会社を選んでください'})};
+      const rows=await getSheet(token,'マッチング結果');
+      const base=rows.slice(1).find(r=>r[0]===batchId);
+      if(!base)return{statusCode:404,headers,body:JSON.stringify({error:'マッチング結果が見つかりません'})};
+      const normC=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+      const want=new Set(companies.map(normC));
+      const participants=await getParticipants();
+      const values=participants.filter(p=>want.has(normC(p.company))).map(p=>[batchId,base[1]||'',base[2]||'',base[3]||'',base[4]||'',base[5]||'',p.company,'','未通知',base[9]||'{}',String(p.cardRow||''),base[11]||'default']);
+      if(!values.length)return{statusCode:404,headers,body:JSON.stringify({error:'名刺データが見つかりませんでした'})};
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${process.env.GOOGLE_SHEET_ID}/values/${encodeURIComponent('マッチング結果!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values})});
+      return{statusCode:200,headers,body:JSON.stringify({success:true,added:values.length})};
     }
 
     if(action==='excludeCompanies'){
