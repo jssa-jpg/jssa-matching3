@@ -269,7 +269,8 @@ const top100=scored.filter(m=>topCompanies.has(coKey(m.company)));
 // スコア上位の企業をレビュー用シートに保存し、岡代表が管理画面で確認した上で
 // 企業名のみをメールで通知するフローに変更。
 const ui=body.userInfo||{};
-const aiParams={industry,listed,scale,position,region};
+// 管理画面でアンケートの全回答を確認できるよう、任意項目も含めて保存する
+const aiParams={industry,listed,scale,position,region,years,capital,employees,hiring,ma};
 try{
   await saveMatchResultsForReview(userId,ui,top100.map(m=>({company:m.company,score:m.score,cardRow:m.cardRow})),aiParams);
 }catch(e){console.error('saveMatchResultsForReview error:',e.message);}

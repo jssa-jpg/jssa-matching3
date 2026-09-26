@@ -641,12 +641,23 @@ function renderCards(){
         ].filter(Boolean).join('');
         profileHtml=`<div class="applicant-profile"><div class="ap-title">🤝 支援者情報</div><div class="ap-row">${rows||'（未回答）'}</div></div>`;
       }
+      // マッチングアンケートの回答（未回答は「無回答」。任意項目を保存していない古い結果は「記録なし」）
+      const ap=b.aiParams||{};
+      const hasOptional=Object.prototype.hasOwnProperty.call(ap,'years');
+      const ansVal=(k,optional)=>{
+        if(optional&&!hasOptional)return '<span style="color:#9ca3af">記録なし</span>';
+        const v=ap[k];const t=Array.isArray(v)?v.filter(Boolean).join('、'):String(v||'').trim();
+        return t?t:'<span style="color:#9ca3af">無回答</span>';
+      };
+      const surveyItems=[['① 業種','industry'],['② 上場/未上場','listed'],['③ 企業規模','scale'],['④ 役職クラス','position'],['⑤ 設立年数','years',1],['⑥ 資本金','capital',1],['⑦ 従業員数','employees',1],['⑧ 年間採用人数','hiring',1],['⑨ M&A実績','ma',1],['⑩ 地域','region']];
+      const surveyHtml=`<div class="applicant-profile" style="background:#f9fafb;border-color:#e5e7eb"><div class="ap-title">📝 マッチングアンケートの回答</div><div class="ap-row">${surveyItems.map(([label,k,opt])=>`<span><b>${label}:</b> ${ansVal(k,opt)}</span>`).join('')}</div></div>`;
       return `<div class="card">
         <div class="card-head">
           <div><div class="card-title">${b.userCompany||'—'} ${b.userName||''}</div><div class="card-sub">${b.userEmail||''} | ${jstDate(b.createdAt)} | ${jstTime(b.createdAt)} | ${totalCount}社マッチ</div></div>
           ${statusBadge}
         </div>
         ${profileHtml}
+        ${surveyHtml}
         ${loaded.length>0?`<div class="select-toolbar">
           <div class="sel-btns">
             <button class="sel-btn" onclick="selectAllLoaded('${b.batchId}',true)">表示中を全選択</button>
