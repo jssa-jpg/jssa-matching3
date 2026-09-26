@@ -27,3 +27,6 @@
 
 [functions."collect-company-info"]
   timeout = 26
+
+[functions."match"]
+  timeout = 26

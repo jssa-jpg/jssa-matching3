@@ -404,12 +404,12 @@ saveAnswers();
 const btn=document.getElementById('submit-btn');btn.textContent='送信中...';btn.disabled=true;
 try{
 const res=await fetch('/.netlify/functions/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:{...sv,industry:[],listed,scale:getMs('ms3'),position:getMs('ms4'),years:getMs('ms5'),capital:getMs('ms6'),employees:getMs('ms7'),hiring:getMs('ms8'),ma:document.getElementById('f-ma').value,region:getMs('ms10')},userInfo:{id:currentUser.id||'guest',company:currentUser.company||'ゲスト',name:currentUser.name||'',position:currentUser.position||'',email:currentUser.email||'',memberRank:currentUser.memberRank||'レギュラー'}})});
-const data=await res.json();
+const raw=await res.text();let data;try{data=JSON.parse(raw);}catch(_){throw new Error(`サーバーの応答が不正です（${res.status}）。時間をおいて再度お試しください。`);}
 if(!data.success)throw new Error(data.error||'エラーが発生しました');
 document.getElementById('submit-btn').style.display='none';
 document.getElementById('results-section').style.display='block';
 document.getElementById('results-section').scrollIntoView({behavior:'smooth'});
-}catch(e){alert('エラー: '+e.message);}
+}catch(e){try{fetch('/.netlify/functions/diag',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fn:'マッチング申込',userId:(currentUser&&currentUser.id)||'',message:e.message})});}catch(_){}alert('エラー: '+e.message);}
 finally{btn.textContent='✨ マッチングを申し込む';btn.disabled=false;}
 }
 function doReset(){sel.q1=[];sel.q2=[];sel.q3=[];sel.q4=[];['q1','q2','q3','q4'].forEach(q=>{document.getElementById(q+'-other').value='';document.getElementById('field-'+q).classList.remove('invalid');});renderSurvey();document.querySelectorAll('.ms-dropdown input[type=checkbox]').forEach(c=>c.checked=false);['ms3','ms4','ms5','ms6','ms7','ms8','ms10'].forEach(id=>{document.getElementById(id+'-text').textContent=id==='ms10'?'こだわらない（全国）':'こだわらない';document.getElementById(id+'-btn').classList.remove('selected');document.querySelectorAll('#'+id+'-drop .ms-item').forEach(i=>i.classList.remove('checked'));});document.getElementById('f-listed').selectedIndex=0;document.getElementById('f-ma').selectedIndex=0;document.getElementById('err-msg').classList.remove('show');document.getElementById('results-section').style.display='none';document.getElementById('submit-btn').style.display='';}

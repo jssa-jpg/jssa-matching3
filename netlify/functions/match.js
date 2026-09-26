@@ -1,5 +1,5 @@
 const RULES=require('./survey-rules');
-const{getParticipants,getIntroducedCompanies,saveMatchResultsForReview,cardTime,getPriorityLists,priorityTier}=require('./sheets-helper');
+const{appendSystemLog,getParticipants,getIntroducedCompanies,saveMatchResultsForReview,cardTime,getPriorityLists,priorityTier}=require('./sheets-helper');
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const rateLimit=new Map();
 function checkRateLimit(ip){const now=Date.now();const entry=rateLimit.get(ip)||{count:0,reset:now+60000};if(now>entry.reset){entry.count=0;entry.reset=now+60000;}entry.count++;rateLimit.set(ip,entry);return entry.count<=30;}
@@ -157,6 +157,7 @@ if(event.httpMethod!=="POST"){return{statusCode:405,body:"Method Not Allowed"};}
 const headers={"Access-Control-Allow-Origin":"*","Content-Type":"application/json"};
 const ip=event.headers["x-forwarded-for"]?event.headers["x-forwarded-for"].split(",")[0]:"unknown";
 if(!checkRateLimit(ip)){return{statusCode:429,headers,body:JSON.stringify({error:"リクエストが多すぎます。"})};}
+const t0=Date.now();let logUser='';
 try{
 const body=JSON.parse(event.body);
 const isOld=!!(body.company||body.name)&&!body.answers&&!body.userInfo;
@@ -188,7 +189,9 @@ nv={attribute:String(ans.attribute||''),attributeOther:String(ans.attributeOther
   purposes:Array.isArray(ans.purposes)?ans.purposes.slice(0,2):[],purposeOther:String(ans.purposeOther||'').trim(),
   departments:Array.isArray(ans.departments)?ans.departments.slice(0,3):[],departmentOther:String(ans.departmentOther||'').trim()};
 }
+logUser=userId;
 const all=await getParticipants();
+const tRead=Date.now()-t0;
 const exc=new Set();
 // 既にこの会員へ企業名を案内済み（マッチング結果シートで「企業名送信済み」）の企業は候補から除外する
 const normCo=s=>String(s||'').normalize('NFKC').replace(/\s+/g,'').toLowerCase();
@@ -289,9 +292,11 @@ const top100=scored.filter(m=>topCompanies.has(coKey(m.company)));
 const ui=body.userInfo||{};
 // 管理画面でアンケートの全回答を確認できるよう、任意項目も含めて保存する
 const aiParams={industry,listed,scale,position,region,years,capital,employees,hiring,ma,...nv};
+let saveErr='';
 try{
   await saveMatchResultsForReview(userId,ui,top100.map(m=>({company:m.company,score:m.score,cardRow:m.cardRow})),aiParams);
-}catch(e){console.error('saveMatchResultsForReview error:',e.message);}
+}catch(e){saveErr=e.message;console.error('saveMatchResultsForReview error:',e.message);}
+await appendSystemLog('match',userId,saveErr?'保存失敗':(top100.length?'OK':'候補0件'),Date.now()-t0,`名刺${all.length}件(読込${tRead}ms) 候補${cands.length}件 保存${topCompanies.size}社 新アンケート=${useNew?'はい':'いいえ'} 属性=${nv.attribute||'-'} 業種=${nv.industryDetail||'-'}${saveErr?' 保存エラー:'+saveErr:''}`);
 return{statusCode:200,headers,body:JSON.stringify({success:true,submitted:true,count:topCompanies.size})};
-}catch(e){return{statusCode:500,headers,body:JSON.stringify({error:e.message,stack:e.stack})};}
+}catch(e){await appendSystemLog('match',logUser,'エラー',Date.now()-t0,e.message);return{statusCode:500,headers,body:JSON.stringify({error:e.message,stack:e.stack})};}
 };

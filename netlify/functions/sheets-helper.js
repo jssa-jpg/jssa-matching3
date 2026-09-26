@@ -407,6 +407,7 @@ async function saveMatchResultsForReview(userId, userInfo, matches, aiParams) {
     if (!ar.ok) { const t = await ar.text().catch(() => ''); throw new Error(`append ${ar.status} ${t.slice(0, 300)}`); }
   } catch (e) {
     console.error('saveMatchResultsForReview error:', e.message);
+    throw e;
   }
 }
 
@@ -555,4 +556,23 @@ async function getLastSurvey(userId) {
   }
 }
 
-module.exports = { getLastSurvey, getPriorityLists, priorityTier, changeRequestBalance, personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
+// 動作記録（システムログ）シート：マッチングなどの実行結果・所要時間・エラーを1行ずつ残す（個人情報は書かない）
+const LOG_SHEET = 'システムログ';
+async function appendSystemLog(fn, userId, result, ms, detail) {
+  try {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const token = await getAccessToken(serviceAccount);
+    const jst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    const row = [[jst, String(fn || ''), String(userId || ''), String(result || ''), String(ms == null ? '' : ms), String(detail || '').slice(0, 500)]];
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(LOG_SHEET + '!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+    const opt = { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } };
+    let r = await fetch(url, { ...opt, body: JSON.stringify({ values: row }) });
+    if (!r.ok) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, { ...opt, body: JSON.stringify({ requests: [{ addSheet: { properties: { title: LOG_SHEET } } }] }) });
+      await fetch(url, { ...opt, body: JSON.stringify({ values: [['日時(JST)', '機能', 'ユーザーID', '結果', '所要ms', '詳細'], ...row] }) });
+    }
+  } catch (e) { console.error('appendSystemLog error:', e.message); }
+}
+
+module.exports = { appendSystemLog, LOG_SHEET, getLastSurvey, getPriorityLists, priorityTier, changeRequestBalance, personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
