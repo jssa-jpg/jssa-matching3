@@ -1,7 +1,7 @@
 // 動作状況の確認用（読み取り専用・個人情報なし）
 // GET  : システムログの最新行、マッチング結果の最新バッチの件数、名刺データのAI分類の進み具合を返す
 // POST : 画面側で起きたエラーをシステムログに記録する（{fn, userId, message}）
-const { appendSystemLog, LOG_SHEET } = require('./sheets-helper');
+const { appendSystemLog, LOG_SHEET, getParticipants, getIntroducedCompanies } = require('./sheets-helper');
 
 async function token() {
   const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -27,6 +27,18 @@ exports.handler = async (event) => {
       const b = JSON.parse(event.body || '{}');
       await appendSystemLog(`画面:${String(b.fn || '').slice(0, 30)}`, String(b.userId || '').slice(0, 40), 'エラー', '', String(b.message || '').slice(0, 400));
       return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
+    }
+    const qs = event.queryStringParameters || {};
+    if (qs.company) {
+      // 会社名の一部で名刺を探し、属性・業種詳細・URL有無と、指定会員に案内済みかどうかを返す（氏名・連絡先は返さない）
+      const kw = String(qs.company).normalize('NFKC').toLowerCase();
+      const all = await getParticipants();
+      const hits = all.filter(p => String(p.company).normalize('NFKC').toLowerCase().includes(kw)).slice(0, 40);
+      let introduced = [];
+      if (qs.user) { try { introduced = await getIntroducedCompanies(qs.user); } catch (e) {} }
+      const n = v => String(v || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+      const intro = new Set(introduced.map(n));
+      return { statusCode: 200, headers, body: JSON.stringify({ 件数: hits.length, 名刺: hits.map(p => ({ 会社名: p.company, 部署: p.department, 役職: p.position, 属性: p.attribute, 業種詳細: p.industryDetail, 地域: p.prefecture, URLあり: !!(p.siteUrl && p.siteUrl !== '不明'), 案内済み: intro.has(n(p.company)) })) }, null, 1) };
     }
     if ((event.queryStringParameters || {}).selftest) { await appendSystemLog('selftest', '', 'OK', 0, 'ログ書き込みテスト'); }
     const tk = await token();
