@@ -54,6 +54,15 @@ const PURPOSE_FIT = {
   '情報交換': { attributes: [], departments: [] },
 };
 
+function companyKey(v){
+  // 会社の照合用キー：全角半角・大文字小文字・スペース・「・」や記号・法人格（株式会社、Co., Ltd.、Inc. など）の違いを無視する
+  const s=String(v||'').normalize('NFKC').toLowerCase();
+  const k=s.replace(/株式会社|有限会社|合同会社|合資会社|合名会社|一般社団法人|一般財団法人|公益社団法人|公益財団法人|有限責任|\(株\)|\(有\)|\(同\)|㈱|㈲/g,'')
+    .replace(/(^|[^a-z0-9])(co\.?\s*,?\s*ltd|company\s+limited|limited|ltd|inc|incorporated|corporation|corp|llc|l\.l\.c|k\.k|g\.k)\.?(?=[^a-z0-9]|$)/g,'$1')
+    .replace(/[\s・･,，.。\-‐－–—_'’"“”()「」『』&＋+]/g,'');
+  return k||s.replace(/\s+/g,'');
+}
+
 const norm = v => String(v || '').normalize('NFKC').toLowerCase();
 
 // 名刺の部署・役職が「会いたい部署」に当てはまるか
@@ -126,4 +135,4 @@ function evaluateCard(ans, card) {
 }
 const MAX_SCORE = 120;
 
-module.exports = { ANY, OTHER, ATTRIBUTES, INDUSTRY_GROUPS, INDUSTRIES, PURPOSES, DEPARTMENTS, DEPT_KEYWORDS, PURPOSE_FIT, departmentFits, isNewSurvey, evaluateCard, MAX_SCORE };
+module.exports = { companyKey, ANY, OTHER, ATTRIBUTES, INDUSTRY_GROUPS, INDUSTRIES, PURPOSES, DEPARTMENTS, DEPT_KEYWORDS, PURPOSE_FIT, departmentFits, isNewSurvey, evaluateCard, MAX_SCORE };

@@ -181,7 +181,7 @@ exports.handler=async(event)=>{
       const kws=(Array.isArray(keywords)?keywords:[]).map(k=>String(k||'').normalize('NFKC').trim().toLowerCase()).filter(Boolean);
       if(!Array.isArray(items)||!kws.length)return{statusCode:400,headers,body:JSON.stringify({error:'検索キーワードを入力してください'})};
       const cardRows=await getSheet(token,'名刺データ');
-      const normC=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+      const normC=RULES.companyKey;
       const byCompany=new Map();
       cardRows.slice(1).forEach(r=>{const k=normC(r[0]);if(!k)return;if(!byCompany.has(k))byCompany.set(k,[]);byCompany.get(k).push(r);});
       const hitRows=[];
@@ -202,7 +202,7 @@ exports.handler=async(event)=>{
       const{keywords,userId,batchId}=body;
       const kws=(Array.isArray(keywords)?keywords:[]).map(k=>String(k||'').normalize('NFKC').trim().toLowerCase()).filter(Boolean);
       if(!kws.length)return{statusCode:400,headers,body:JSON.stringify({error:'検索キーワードを入力してください'})};
-      const normC=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+      const normC=RULES.companyKey;
       const skip=new Set();
       if(userId){try{(await getIntroducedCompanies(userId)).forEach(c=>skip.add(normC(c)));}catch(e){}}
       if(batchId){(await getSheet(token,'マッチング結果')).slice(1).forEach(r=>{if(r[0]===batchId)skip.add(normC(r[6]));});}
@@ -229,7 +229,7 @@ exports.handler=async(event)=>{
       const rows=await getSheet(token,'マッチング結果');
       const base=rows.slice(1).find(r=>r[0]===batchId);
       if(!base)return{statusCode:404,headers,body:JSON.stringify({error:'マッチング結果が見つかりません'})};
-      const normC=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+      const normC=RULES.companyKey;
       const want=new Set(companies.map(normC));
       const participants=await getParticipants();
       const values=participants.filter(p=>want.has(normC(p.company))).map(p=>[batchId,base[1]||'',base[2]||'',base[3]||'',base[4]||'',base[5]||'',p.company,'','未通知',base[9]||'{}',String(p.cardRow||''),base[11]||'default']);
@@ -259,13 +259,13 @@ exports.handler=async(event)=>{
       const byPerson=new Map();
       cardRows.forEach((r,i)=>{if(i===0)return;const k=personKey(r[0],r[3],r[4]);if(!k)return;if(!byPerson.has(k))byPerson.set(k,[]);byPerson.get(k).push(i);});
       const byCompanyRows=new Map();
-      const normC0=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+      const normC0=RULES.companyKey;
       cardRows.forEach((r,i)=>{if(i===0)return;const k=normC0(r[0]);if(!k)return;byCompanyRows.set(k,r);});
       const results=items.map(it=>{
         const rowIdx=it.cardRow;
         let row=(rowIdx&&rowIdx>1)?cardRows[rowIdx-1]:null;
         // 重複名刺の整理などで行がずれた場合は、会社名で探し直す
-        const normC=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+        const normC=RULES.companyKey;
         if(row&&it.company&&normC(row[0])!==normC(it.company))row=null;
         if(!row&&it.company){row=byCompanyRows.get(normC(it.company))||null;}
         // 同じ人物の新しい名刺（異動・昇進後）があれば、そちらの部署・役職を表示する
@@ -307,7 +307,7 @@ exports.handler=async(event)=>{
             appProfile.investmentIndustry?`投資先業種：${appProfile.investmentIndustry}`:''
           ].filter(Boolean).join('／');
           // 同じ会社の社員が複数いても、AIには会社ごとに1回だけ依頼する
-          const normCo2=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
+          const normCo2=RULES.companyKey;
           const uniq=[];const idxOf=new Map();
           results.forEach(r=>{const k=normCo2(r.company);if(!idxOf.has(k)){idxOf.set(k,uniq.length);uniq.push(r);}});
           const surveyText=`${ap.targetCompany?`- 会員が紹介を希望した会社：${ap.targetCompany}\n`:''}${ap.priority&&ap.priority!=='こだわらない'?`- 紹介先の種類：${ap.priority==='両方'?'スポンサー企業または協会顧問の会社':ap.priority==='スポンサー'?'スポンサー企業':'協会顧問の会社'}\n`:''}${RULES.isNewSurvey(ap)?`- 会いたい相手の属性：${ap.attribute===RULES.OTHER?ap.attributeOther:ap.attribute}\n- 希望する業種・領域：${ap.industryDetail===RULES.OTHER?ap.industryOther:ap.industryDetail}\n- 面談の目的：${(ap.purposes||[]).map(p=>p===RULES.OTHER?ap.purposeOther:p).join('、')}\n- 会いたい部署・担当者：${(ap.departments||[]).map(p=>p===RULES.OTHER?ap.departmentOther:p).join('、')}\n`:`- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n`}- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n`;

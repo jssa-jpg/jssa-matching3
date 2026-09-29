@@ -244,7 +244,15 @@ let loadedDetails={}; // batchId -> [{rowIndex, company, department, ... , match
 
 // ===== 同じ会社の社員（名刺）を1枚のカードにまとめる =====
 let expandedGroups={}; // `${batchId}|${groupKey}` -> 全社員を表示中
-function coNorm(c){return String(c||'').normalize('NFKC').replace(/\s/g,'');}
+function companyKey(v){
+  // 会社の照合用キー：全角半角・大文字小文字・スペース・「・」や記号・法人格（株式会社、Co., Ltd.、Inc. など）の違いを無視する
+  const s=String(v||'').normalize('NFKC').toLowerCase();
+  const k=s.replace(/株式会社|有限会社|合同会社|合資会社|合名会社|一般社団法人|一般財団法人|公益社団法人|公益財団法人|有限責任|\(株\)|\(有\)|\(同\)|㈱|㈲/g,'')
+    .replace(/(^|[^a-z0-9])(co\.?\s*,?\s*ltd|company\s+limited|limited|ltd|inc|incorporated|corporation|corp|llc|l\.l\.c|k\.k|g\.k)\.?(?=[^a-z0-9]|$)/g,'$1')
+    .replace(/[\s・･,，.。\-‐－–—_'’"“”()「」『』&＋+]/g,'');
+  return k||s.replace(/\s+/g,'');
+}
+function coNorm(c){return companyKey(c);}
 function cardTimeF(v){const m=String(v||'').normalize('NFKC').match(/(\d{4})\D+(\d{1,2})(?:\D+(\d{1,2}))?/);if(m)return Date.UTC(+m[1],+m[2]-1,+(m[3]||1));const s=String(v||'').trim();if(/^\d{5}$/.test(s))return Date.UTC(1899,11,30)+parseInt(s,10)*86400000;return 0;}
 function batchGroups(batch){
   const m=new Map();
@@ -519,6 +527,19 @@ function renderEnrichPanel(){
     <div class="enrich-summary" id="dup-summary"></div>
     <div class="enrich-log" id="dup-log" style="margin-bottom:28px"></div>
 
+    <h3>会社名の表記ゆれを統一</h3>
+    <p class="enrich-lead">同じ会社が違う表記で登録されていると、マッチング結果に同じ会社が何度も出たり、案内済みの会社がまた候補に出たりします。<br>①スペース・「株式会社」「Co., Ltd.」などの法人格・「・」だけが違う組は、マッチングではすでに1社として扱っていますが、ここで表記をそろえておくと管理画面の表示もそろいます。②英語表記と日本語表記の組（例：Mitsubishi UFJ Capital Co., Ltd. と 三菱UFJキャピタル株式会社）は、AIが日本語の正式名称を調べて候補を出します。<br>内容を確認し、残す表記を選んでチェックした組だけを統一してください。名刺データのA列と、マッチング結果シートの会社名（案内済みの記録）を書き換えます。</p>
+    <div class="enrich-actions">
+      <button onclick="findNameVariants()">表記ゆれを探す</button>
+      <button id="nv-stop" onclick="nvStop=true" disabled>AIの確認を停止</button>
+      <button onclick="nvSelectAll(true)">すべてチェック</button>
+      <button onclick="nvSelectAll(false)">すべて外す</button>
+      <button class="primary" id="nv-apply" onclick="applyNameUnify()" disabled>チェックした組を統一</button>
+    </div>
+    <div class="enrich-summary" id="nv-summary"></div>
+    <div class="enrich-bar"><div id="nv-bar"></div></div>
+    <div class="enrich-log" id="nv-log" style="margin-bottom:28px"></div>
+
     <h3>属性・業種詳細のAI分類</h3>
     <p class="enrich-lead">マッチングアンケートの「①会いたい相手の属性」「②希望する業種・領域」で照合できるよう、名刺データの会社をAIで分類し、AJ列（属性）とAK列（業種詳細）に書き込みます。会社単位で処理し、同じ会社の名刺にはすべて同じ分類が入ります。<br>初回は全社（約6,900社）が対象で、20社ずつ処理します。名刺を追加したときは、AI情報補完のあとにこちらも実行してください。</p>
     <div class="enrich-actions">
@@ -578,6 +599,76 @@ async function mergeDuplicates(){
     document.getElementById('dup-log').innerHTML='';
     enrichTargets=[];document.getElementById('enrich-start').disabled=true;document.getElementById('enrich-log').innerHTML='';
   }catch(e){sum.textContent='エラー：'+e.message;}
+}
+// ===== 会社名の表記ゆれを統一 =====
+let nvGroups=[],nvStop=false;
+function nvRow(g,i){
+  const opts=g.names.map(n=>`<option value="${enrichEsc(n.name)}"${n.name===g.to?' selected':''}>${enrichEsc(n.name)}（${n.count}枚）</option>`).join('');
+  return `<tr id="nv-row-${i}"><td><input type="checkbox" class="nv-chk" data-i="${i}"${g.checked?' checked':''}${g.done?' disabled':''}></td><td>${g.type==='ai'?'英語↔日本語':'表記ゆれ'}</td><td>${g.names.map(n=>`${enrichEsc(n.name)}（${n.count}枚）`).join('<br>')}${g.note?`<div style="color:#6b7280;font-size:11px">${enrichEsc(g.note)}</div>`:''}</td><td><select class="nv-to" data-i="${i}" style="max-width:260px">${opts}</select></td><td class="nv-st">${g.done?'<span class="enrich-ok">✓ 統一済み</span>':''}</td></tr>`;
+}
+function nvRender(){
+  const log=document.getElementById('nv-log');
+  log.innerHTML=nvGroups.length?`<table><thead><tr><th></th><th>種類</th><th>見つかった表記</th><th>残す表記</th><th>結果</th></tr></thead><tbody>${nvGroups.map(nvRow).join('')}</tbody></table>`:'';
+  document.getElementById('nv-apply').disabled=!nvGroups.length;
+}
+function nvSync(){document.querySelectorAll('.nv-chk').forEach(c=>{nvGroups[c.dataset.i].checked=c.checked;});document.querySelectorAll('.nv-to').forEach(c=>{nvGroups[c.dataset.i].to=c.value;});}
+function nvSelectAll(v){nvSync();nvGroups.forEach(g=>{if(!g.done)g.checked=v;});nvRender();}
+async function findNameVariants(){
+  const sum=document.getElementById('nv-summary');sum.textContent='名刺データを確認しています…';
+  nvGroups=[];nvStop=false;nvRender();
+  try{
+    const res=await fetch('/.netlify/functions/collect-company-info',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'findNameGroups'})});
+    const data=await res.json();
+    if(!data.success){sum.textContent='エラー：'+(data.error||'確認できませんでした');return;}
+    // ① 規則で見つかった表記ゆれ（多く使われている表記を残す候補にし、最初からチェックしておく）
+    nvGroups=data.ruleGroups.map(g=>({type:'rule',names:g.names,to:g.names[0].name,checked:true}));
+    nvRender();
+    const latinCount=new Map((data.latin||[]).map(x=>[x.name,x.count]));const latin=(data.latin||[]).map(x=>x.name);
+    sum.innerHTML=`表記ゆれ：<b>${nvGroups.length}組</b>。続けて英語表記の会社（${latin.length}社）の日本語名をAIで確認しています…`;
+    // ② 英語表記の会社を40社ずつ、2つ同時にAIで確認する
+    document.getElementById('nv-stop').disabled=false;
+    const chunks=[];for(let i=0;i<latin.length;i+=40)chunks.push(latin.slice(i,i+40));
+    let done=0,found=0;
+    for(let i=0;i<chunks.length;i+=2){
+      if(nvStop)break;
+      const pair=chunks.slice(i,i+2);
+      const results=await Promise.all(pair.map(async names=>{for(let t=0;t<2;t++){try{const r=await fetch('/.netlify/functions/collect-company-info',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'matchLatinNames',names})});const d=JSON.parse(await r.text());if(d.success)return d.pairs;}catch(e){}}return[];}));
+      nvSync();
+      results.flat().forEach(p=>{
+        // 同じ日本語表記がすでに一覧にあれば、その組に英語表記を足す
+        const g=nvGroups.find(x=>x.type==='ai'&&x.to===p.japanese);
+        if(g){if(!g.names.some(n=>n.name===p.english))g.names.push({name:p.english,count:latinCount.get(p.english)||1});return;}
+        nvGroups.push({type:'ai',names:[{name:p.japanese,count:p.jaCount},{name:p.english,count:latinCount.get(p.english)||1}],to:p.japanese,checked:false,note:p.exact?'':`AIの回答：${p.ai}（名称が一部違うため要確認）`});found++;
+      });
+      done+=pair.reduce((a,c)=>a+c.length,0);
+      nvRender();
+      document.getElementById('nv-bar').style.width=(latin.length?done/latin.length*100:100)+'%';
+      sum.innerHTML=`表記ゆれ：<b>${nvGroups.filter(g=>g.type==='rule').length}組</b>／英語↔日本語：<b>${found}組</b>（英語表記の会社 ${done} / ${latin.length}社を確認）`;
+    }
+    document.getElementById('nv-stop').disabled=true;
+    sum.innerHTML+=`<br>${nvStop?'停止しました。':'確認が終わりました。'}英語↔日本語の組はAIの判断なので、内容を確認してからチェックしてください。`;
+  }catch(e){sum.textContent='エラー：'+e.message;document.getElementById('nv-stop').disabled=true;}
+}
+async function applyNameUnify(){
+  nvSync();
+  const targets=nvGroups.map((g,i)=>({g,i})).filter(x=>x.g.checked&&!x.g.done);
+  if(!targets.length){alert('統一する組にチェックを入れてください。');return;}
+  if(!confirm(`${targets.length}組の会社名を、選んだ表記に統一します。名刺データとマッチング結果シートの会社名が書き換わります。よろしいですか？`))return;
+  document.getElementById('nv-apply').disabled=true;
+  let ok=0,cards=0;
+  for(const {g,i} of targets){
+    const cell=document.querySelector(`#nv-row-${i} .nv-st`);if(cell)cell.textContent='統一中…';
+    try{
+      const res=await fetch('/.netlify/functions/collect-company-info',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'unifyNames',from:g.names.map(n=>n.name),to:g.to})});
+      const d=await res.json();
+      if(!d.success)throw new Error(d.error||'失敗');
+      g.done=true;g.checked=false;ok++;cards+=d.cards;
+      if(cell)cell.innerHTML=`<span class="enrich-ok">✓ 名刺${d.cards}枚・記録${d.results}件</span>`;
+      const chk=document.querySelector(`#nv-row-${i} .nv-chk`);if(chk){chk.checked=false;chk.disabled=true;}
+    }catch(e){if(cell)cell.innerHTML=`<span class="enrich-ng">${enrichEsc(e.message)}</span>`;}
+  }
+  document.getElementById('nv-apply').disabled=false;
+  document.getElementById('nv-summary').innerHTML+=`<br><b>${ok}組を統一しました（名刺${cards}枚を書き換え）。</b>`;
 }
 let clsTargets=[],clsRunning=false,clsStop=false;
 async function findUnclassified(){

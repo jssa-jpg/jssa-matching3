@@ -194,7 +194,7 @@ const all=await getParticipants();
 const tRead=Date.now()-t0;
 const exc=new Set();
 // 既にこの会員へ企業名を案内済み（マッチング結果シートで「企業名送信済み」）の企業は候補から除外する
-const normCo=s=>String(s||'').normalize('NFKC').replace(/\s+/g,'').toLowerCase();
+const normCo=RULES.companyKey;
 if(userId){try{const introduced=await getIntroducedCompanies(userId);introduced.forEach(c=>exc.add(normCo(c)));if(introduced.length)console.log(`案内済み企業を除外: ${introduced.length}社`);}catch(e){console.error('getIntroducedCompanies error:',e.message);}}
 
 // 企業名ピンポイント検索
@@ -292,7 +292,7 @@ if(useNew){
 scored.push({id:p.id||"",cardRow:p.cardRow||0,company:p.company||"",department:p.department||"",position:pp,industry:pi,scale:ps,prefecture:pf,listed:p.listed||"",employees:p.employees||"",founded:p.founded||"",capital:p.capital||"",hiring:p.hiring||"",ma:pm,features:p.features||"",siteUrl:p.siteUrl||"",score:pct,matchReason:"",recommendation:"",firstMessage:""});
 }
 // マッチ度が同じ場合は、名刺交換日が一番新しい社員がいる会社を優先。同じ会社のメンバーはまとめて並べ、その中は名刺交換日の新しい順
-const coKey=c=>String(c||'').normalize('NFKC').replace(/\s/g,'');
+const coKey=RULES.companyKey;
 const companyLatest=new Map();
 for(const p of all){if(!p||!p.company)continue;const k=coKey(p.company);const t=cardTime(p.cardDate);if(t>(companyLatest.get(k)||0))companyLatest.set(k,t);}
 const cardTimeByRow=new Map(all.map(p=>[p.cardRow,cardTime(p.cardDate)]));

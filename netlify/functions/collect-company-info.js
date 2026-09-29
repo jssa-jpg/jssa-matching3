@@ -2,6 +2,7 @@
 //  action:'findEmpty' … 会社名があり、O列（業種）が空の行番号を返す
 //  action:'findDuplicates' … 同じ人物の名刺が複数ある組を返す（最新1枚を残し、古い名刺を削除する候補）
 //  action:'mergeDuplicates' … 古い名刺の企業情報を最新の名刺へ引き継いだうえで、古い名刺の行を削除する
+//  action:'findNameGroups' / 'matchLatinNames' / 'unifyNames' … 会社名の表記ゆれ（英語表記と日本語表記など）を探して統一する
 //  action:'enrich'    … 指定行の会社をAIで調べてO〜W列に書き込む（Web検索あり。時間切れ時は知識ベースで再実行）
 const{personKey,isNewerCard}=require('./sheets-helper');
 const RULES=require('./survey-rules');
@@ -168,6 +169,85 @@ exports.handler=async(event)=>{
       (data.values||[]).slice(1).forEach(r=>{const c=String(r[0]||'').trim();if(!c)return;const k=c.normalize('NFKC').replace(/\s/g,'');if(!seen.has(k))seen.set(k,{company:c,done:!!String(r[35]||'').trim()});else if(String(r[35]||'').trim())seen.get(k).done=true;});
       const all=[...seen.values()];
       return{statusCode:200,headers,body:JSON.stringify({success:true,totalCompanies:all.length,targets:all.filter(x=>!x.done).map(x=>x.company)})};
+    }
+
+    if(action==='findNameGroups'){
+      // 会社名の表記ゆれを探す：①スペース・法人格・記号だけが違う組（規則で判定）②英語表記だけの会社（AIで日本語表記を調べる対象）
+      const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(SHEET+'!A:A')}`,{headers:{'Authorization':`Bearer ${token}`}});
+      const rows=(await res.json()).values||[];
+      const byKey=new Map();
+      rows.slice(1).forEach(r=>{const c=String(r[0]||'').trim();if(!c)return;const k=RULES.companyKey(c);if(!byKey.has(k))byKey.set(k,new Map());const m=byKey.get(k);m.set(c,(m.get(c)||0)+1);});
+      const hasJa=v=>/[぀-ヿ㐀-鿿]/.test(v);
+      const ruleGroups=[];const latin=[];
+      for(const [k,m] of byKey){
+        const names=[...m.entries()].sort((a,b)=>b[1]-a[1]||(hasJa(b[0])-hasJa(a[0]))).map(([name,count])=>({name,count}));
+        if(names.length>1)ruleGroups.push({key:k,names});
+        if(!names.some(n=>hasJa(n.name)))latin.push({name:names[0].name,count:names.reduce((a,n)=>a+n.count,0)});
+      }
+      return{statusCode:200,headers,body:JSON.stringify({success:true,totalCompanies:byKey.size,ruleGroups,latin})};
+    }
+
+    if(action==='matchLatinNames'){
+      // 英語表記の会社名について、AIに日本での正式な会社名を答えてもらい、名刺データにある日本語表記の会社と照合する
+      const names=(Array.isArray(body.names)?body.names:[]).slice(0,40);
+      if(!names.length)return{statusCode:400,headers,body:JSON.stringify({error:'会社がありません'})};
+      const prompt=`次の英語表記の会社名それぞれについて、日本で使われている正式な日本語の会社名（例：Mitsubishi UFJ Capital Co., Ltd. → 三菱UFJキャピタル株式会社、TOHOKU University Venture Partners → 東北大学ベンチャーパートナーズ株式会社）を答えてください。
+日本語の正式名称が確実にわからない会社、日本法人がない海外の会社、英語名がそのまま正式名称の会社は空文字にしてください。推測で作らないでください。
+
+${names.map((n,i)=>`${i+1}. ${n}`).join('\n')}
+
+回答はJSON配列のみ（説明不要）。順番・件数は一覧と同じにしてください。
+[{"no":1,"ja":"..."}]`;
+      const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),20000);
+      let arr=[];
+      try{
+        const [ai,sheet]=await Promise.all([
+          fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl.signal,headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2500,messages:[{role:'user',content:prompt}]})}).then(r=>r.json()),
+          fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(SHEET+'!A:A')}`,{headers:{'Authorization':`Bearer ${token}`}}).then(r=>r.json())
+        ]);
+        const text=(ai.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+        const m=text.replace(/```json|```/g,'').match(/\[[\s\S]*\]/);
+        arr=m?JSON.parse(m[0]):[];
+        // 名刺データにある日本語表記の会社（キー → 表記と件数）
+        const hasJa=v=>/[぀-ヿ㐀-鿿]/.test(v);
+        const ja=new Map();
+        (sheet.values||[]).slice(1).forEach(r=>{const c=String(r[0]||'').trim();if(!c||!hasJa(c))return;const k=RULES.companyKey(c);if(!ja.has(k))ja.set(k,new Map());const mm=ja.get(k);mm.set(c,(mm.get(c)||0)+1);});
+        const best=k=>{const mm=ja.get(k);return[...mm.entries()].sort((a,b)=>b[1]-a[1])[0];};
+        const pairs=[];
+        names.forEach((en,i)=>{
+          const cand=String((arr.find(x=>Number(x.no)===i+1)||arr[i]||{}).ja||'').trim();
+          if(!cand)return;
+          const ck=RULES.companyKey(cand);
+          let hitKey=ja.has(ck)?ck:null;
+          // 完全に一致しない場合は「グループ」「ジャパン」などの有無だけが違うものを探す（4文字以上で前方一致）
+          if(!hitKey&&ck.length>=4){for(const k of ja.keys()){if((k.startsWith(ck)||ck.startsWith(k))&&Math.min(k.length,ck.length)>=4&&Math.abs(k.length-ck.length)<=6){hitKey=k;break;}}}
+          if(!hitKey)return;
+          const [jaName,jaCount]=best(hitKey);
+          pairs.push({english:en,ai:cand,japanese:jaName,jaCount,exact:hitKey===ck});
+        });
+        return{statusCode:200,headers,body:JSON.stringify({success:true,pairs})};
+      }finally{clearTimeout(timer);}
+    }
+
+    if(action==='unifyNames'){
+      // 選んだ表記に会社名をそろえる：名刺データA列と、マッチング結果G列（案内済みの記録）を書き換える
+      const from=(Array.isArray(body.from)?body.from:[]).map(v=>String(v||'').trim()).filter(Boolean);
+      const to=String(body.to||'').trim();
+      if(!to||!from.length)return{statusCode:400,headers,body:JSON.stringify({error:'統一先と統一する会社名を指定してください'})};
+      // 選んだ表記と照合キーが同じ表記（スペースや法人格だけ違うもの）もまとめて書き換える
+      const keys=new Set(from.map(RULES.companyKey));
+      const targets={has:v=>v!==to&&keys.has(RULES.companyKey(v)),size:keys.size};
+      if(!targets.size)return{statusCode:200,headers,body:JSON.stringify({success:true,cards:0,results:0})};
+      const get=async range=>(((await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`,{headers:{'Authorization':`Bearer ${token}`}})).json()).values)||[]);
+      const [colA,colG]=await Promise.all([get(SHEET+'!A:A'),get('マッチング結果!G:G')]);
+      const data=[];let cards=0,results=0;
+      colA.forEach((r,i)=>{if(i>0&&targets.has(String(r[0]||'').trim())){data.push({range:`${SHEET}!A${i+1}`,values:[[to]]});cards++;}});
+      colG.forEach((r,i)=>{if(i>0&&targets.has(String(r[0]||'').trim())){data.push({range:`マッチング結果!G${i+1}`,values:[[to]]});results++;}});
+      for(let i=0;i<data.length;i+=500){
+        const ur=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data.slice(i,i+500)})});
+        if(!ur.ok)return{statusCode:500,headers,body:JSON.stringify({error:'書き込みに失敗しました: '+(await ur.text()).slice(0,200)})};
+      }
+      return{statusCode:200,headers,body:JSON.stringify({success:true,cards,results})};
     }
 
     if(action==='classify'){

@@ -1,10 +1,10 @@
 // マッチングアンケート冒頭の「紹介してほしい会社名」検索
 // 名刺データに登録されている会社名だけを返す（部署・氏名・連絡先などは返さない）
 const { getParticipants } = require('./sheets-helper');
+const { companyKey } = require('./survey-rules');
 const rate = new Map();
 const norm = v => String(v || '').normalize('NFKC').replace(/[\s　]+/g, '').toLowerCase();
-// 法人格を除いた比較用の名前（「株式会社」の有無や位置の違いで見つからないのを防ぐ）
-const core = v => norm(v).replace(/株式会社|有限会社|合同会社|合資会社|合名会社|一般社団法人|一般財団法人|公益社団法人|公益財団法人|有限責任|\(株\)|㈱/g, '');
+const core = companyKey;
 
 exports.handler = async (event) => {
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json; charset=utf-8' };
@@ -21,7 +21,7 @@ exports.handler = async (event) => {
     const names = new Map();
     for (const p of all) {
       const c = String(p.company || '').trim(); if (!c) continue;
-      const k = norm(c); if (names.has(k)) continue;
+      const k = core(c); if (names.has(k)) continue;
       if (core(c).includes(q)) names.set(k, c);
     }
     // 完全一致・前方一致を先に並べる
