@@ -371,7 +371,7 @@ function buildSurvey(){
   document.getElementById('qp').innerHTML=PRI_OPTS.map(([v,l])=>`<button type="button" class="chip${v==='こだわらない'?' any':''}" data-q="qp" data-v="${v}" onclick="onPri(this.dataset.v)">${escHtml(l)}</button>`).join('');
   for(const q of ['q1','q3','q4']){const d=Q[q];document.getElementById(q).innerHTML=(d.any?chipHtml(q,ANY,'any'):'')+d.opts.map(v=>chipHtml(q,v)).join('')+chipHtml(q,OTHER);}
   const g=Q.q2.groups;
-  document.getElementById('q2').innerHTML=Object.keys(g).map(name=>`<div class="chip-group">${escHtml(name)}</div><div class="chips">${g[name].map(v=>chipHtml('q2',v)).join('')}</div>`).join('')+`<div class="chip-group">その他</div><div class="chips">${chipHtml('q2',OTHER)}</div><div class="chips" style="margin-top:12px">${chipHtml('q2',ANY,'any')}</div>`;
+  document.getElementById('q2').innerHTML=Object.keys(g).map(name=>`<div class="chip-group">${escHtml(name)}</div><div class="chips">${g[name].map(v=>chipHtml('q2',v)).join('')}</div>`).join('')+`<div class="chips" style="margin-top:12px">${chipHtml('q2',ANY,'any')}</div>`;
   for(const q of ['q1','q2','q3','q4']){const lim=document.createElement('div');lim.className='q-limit';lim.id=q+'-limit';document.getElementById('field-'+q).appendChild(lim);}
   renderSurvey();
 }
@@ -405,7 +405,7 @@ function applySurvey(a){
   if(!a)return;
   const pick=(q,vals)=>{const all=Q[q].opts||Object.values(Q[q].groups).flat();return(vals||[]).filter(v=>v===ANY||v===OTHER||all.includes(v));};
   sel.qp=PRI_OPTS.some(([v])=>v===a.priority)?[a.priority]:[];document.querySelectorAll('.chip[data-q="qp"]').forEach(b=>b.classList.toggle('on',sel.qp.includes(b.dataset.v)));
-  sel.q1=pick('q1',a.attribute?[a.attribute]:[]);sel.q2=pick('q2',a.industryDetail?[a.industryDetail]:[]);sel.q3=pick('q3',a.purposes).slice(0,2);sel.q4=pick('q4',a.departments).slice(0,3);
+  sel.q1=pick('q1',a.attribute?[a.attribute]:[]);sel.q2=pick('q2',a.industryDetail?[a.industryDetail]:[]).filter(v=>v!==OTHER);sel.q3=pick('q3',a.purposes).slice(0,2);sel.q4=pick('q4',a.departments).slice(0,3);
   document.getElementById('q1-other').value=a.attributeOther||'';document.getElementById('q2-other').value=a.industryOther||'';document.getElementById('q3-other').value=a.purposeOther||'';document.getElementById('q4-other').value=a.departmentOther||'';
   renderSurvey();
 }
