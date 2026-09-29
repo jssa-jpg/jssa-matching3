@@ -1,5 +1,5 @@
 const RULES=require('./survey-rules');
-const{appendSystemLog,getParticipants,getIntroducedCompanies,saveMatchResultsForReview,cardTime,getPriorityLists,priorityTier}=require('./sheets-helper');
+const{priorityFlags,appendSystemLog,getParticipants,getIntroducedCompanies,saveMatchResultsForReview,cardTime,getPriorityLists,priorityTier}=require('./sheets-helper');
 const ANTHROPIC_API_KEY=process.env.ANTHROPIC_API_KEY;
 const rateLimit=new Map();
 function checkRateLimit(ip){const now=Date.now();const entry=rateLimit.get(ip)||{count:0,reset:now+60000};if(now>entry.reset){entry.count=0;entry.reset=now+60000;}entry.count++;rateLimit.set(ip,entry);return entry.count<=30;}
@@ -163,7 +163,7 @@ const body=JSON.parse(event.body);
 const isOld=!!(body.company||body.name)&&!body.answers&&!body.userInfo;
 let industry,listed,scale,position,years,capital,employees,hiring,ma,region,userId;
 // 新アンケート（①属性 ②業種・領域 ③面談の目的 ④会いたい部署）
-let nv={attribute:'',attributeOther:'',industryDetail:'',industryOther:'',purposes:[],purposeOther:'',departments:[],departmentOther:''};
+let nv={targetCompany:'',priority:'',attribute:'',attributeOther:'',industryDetail:'',industryOther:'',purposes:[],purposeOther:'',departments:[],departmentOther:''};
 if(isOld){
 industry=Array.isArray(body.industries)?body.industries:[];
 listed=body.wantListingStatus||"";
@@ -185,7 +185,7 @@ hiring=Array.isArray(ans.hiring)?ans.hiring:[];
 ma=ans.ma||"";
 region=Array.isArray(ans.region)?ans.region:[];
 userId=ui.id||ui.company||"";
-nv={attribute:String(ans.attribute||''),attributeOther:String(ans.attributeOther||'').trim(),industryDetail:String(ans.industryDetail||''),industryOther:String(ans.industryOther||'').trim(),
+nv={targetCompany:String(ans.targetCompany||'').trim(),priority:['スポンサー','協会顧問','両方','こだわらない'].includes(ans.priority)?ans.priority:'',attribute:String(ans.attribute||''),attributeOther:String(ans.attributeOther||'').trim(),industryDetail:String(ans.industryDetail||''),industryOther:String(ans.industryOther||'').trim(),
   purposes:Array.isArray(ans.purposes)?ans.purposes.slice(0,2):[],purposeOther:String(ans.purposeOther||'').trim(),
   departments:Array.isArray(ans.departments)?ans.departments.slice(0,3):[],departmentOther:String(ans.departmentOther||'').trim()};
 }
@@ -211,11 +211,19 @@ if(companySearch){
 }
 
 const useNew=RULES.isNewSurvey(nv);
+// ⓪ 紹介してほしい会社が決まっている場合はその会社の名刺だけ、紹介先の種類（スポンサー・協会顧問）を選んだ場合はその会社だけを候補にする
+const priorityLists=await getPriorityLists();
+const target=nv.targetCompany?normCo(nv.targetCompany):'';
+const pri=(!target&&nv.priority&&nv.priority!=='こだわらない')?nv.priority:'';
+const flagCache=new Map();
+const flagsOf=c=>{const k=normCo(c);if(!flagCache.has(k))flagCache.set(k,priorityFlags(c,priorityLists));return flagCache.get(k);};
 const why={};const ng=k=>{why[k]=(why[k]||0)+1;return false;};
 const cands=all.filter(p=>{
 if(!p||!p.company)return false;
+if(target)return normCo(p.company)===target?true:ng('指定会社以外');
+if(pri){const f=flagsOf(p.company);const ok=pri==='スポンサー'?f.sponsor:pri==='協会顧問'?f.advisor:(f.sponsor||f.advisor);if(!ok)return ng('スポンサー・顧問以外');}
 // ①属性はAI分類済みの名刺だけ絞り込む（未分類の名刺は点数を低くして残す）
-if(useNew&&nv.attribute&&nv.attribute!==RULES.ANY&&nv.attribute!==RULES.OTHER&&RULES.ATTRIBUTES.includes(p.attribute)&&p.attribute!==nv.attribute)return ng('属性');
+if(useNew&&!pri&&nv.attribute&&nv.attribute!==RULES.ANY&&nv.attribute!==RULES.OTHER&&RULES.ATTRIBUTES.includes(p.attribute)&&p.attribute!==nv.attribute)return ng('属性');
 if(exc.has(normCo(p.company)))return ng('案内済み');
 // 新アンケートでは任意項目は絞り込みに使わず、合うほど加点する（任意項目の組み合わせで候補が0件になるのを防ぐ）
 if(!useNew){
@@ -244,7 +252,7 @@ const hasFilter=(industry.length>0&&!industry.includes('こだわらない'))||
   (ma&&ma!=='こだわらない')||
   (region.length>0&&!region.includes('こだわらない'))||
   (useNew&&!!nv.attribute&&nv.attribute!==RULES.ANY);
-if(hasFilter&&(!p.siteUrl||p.siteUrl==='不明'||p.siteUrl===''))return false;
+if(!pri&&hasFilter&&(!p.siteUrl||p.siteUrl==='不明'||p.siteUrl===''))return false;
 return true;
 });
 const scored=[];
@@ -289,7 +297,6 @@ const companyLatest=new Map();
 for(const p of all){if(!p||!p.company)continue;const k=coKey(p.company);const t=cardTime(p.cardDate);if(t>(companyLatest.get(k)||0))companyLatest.set(k,t);}
 const cardTimeByRow=new Map(all.map(p=>[p.cardRow,cardTime(p.cardDate)]));
 // マッチ度が同じ場合の優先順位：①スポンサー ②協会顧問 ③名刺交換日が最も新しい社員がいる会社
-const priorityLists=await getPriorityLists();
 const tierCache=new Map();
 const tierOf=c=>{const k=coKey(c);if(!tierCache.has(k))tierCache.set(k,priorityTier(c,priorityLists));return tierCache.get(k);};
 scored.sort((a,b)=>(b.score-a.score)
@@ -312,7 +319,7 @@ let saveErr='';
 try{
   await saveMatchResultsForReview(userId,ui,top100.map(m=>({company:m.company,score:m.score,cardRow:m.cardRow})),aiParams);
 }catch(e){saveErr=e.message;console.error('saveMatchResultsForReview error:',e.message);}
-await appendSystemLog('match',userId,saveErr?'保存失敗':(top100.length?'OK':'候補0件'),Date.now()-t0,`名刺${all.length}件(読込${tRead}ms) 候補${cands.length}件 保存${topCompanies.size}社 新アンケート=${useNew?'はい':'いいえ'} 属性=${nv.attribute||'-'} 業種=${nv.industryDetail||'-'} 除外内訳=${JSON.stringify(why)} 任意=${JSON.stringify({listed,scale,position,years,capital,employees,hiring,ma,region})}${saveErr?' 保存エラー:'+saveErr:''}`);
+await appendSystemLog('match',userId,saveErr?'保存失敗':(top100.length?'OK':'候補0件'),Date.now()-t0,`名刺${all.length}件(読込${tRead}ms) 候補${cands.length}件 保存${topCompanies.size}社 新アンケート=${useNew?'はい':'いいえ'} 指定会社=${nv.targetCompany||'-'} 紹介先=${nv.priority||'-'} 属性=${nv.attribute||'-'} 業種=${nv.industryDetail||'-'} 除外内訳=${JSON.stringify(why)} 任意=${JSON.stringify({listed,scale,position,years,capital,employees,hiring,ma,region})}${saveErr?' 保存エラー:'+saveErr:''}`);
 return{statusCode:200,headers,body:JSON.stringify({success:true,submitted:true,count:topCompanies.size})};
 }catch(e){await appendSystemLog('match',logUser,'エラー',Date.now()-t0,e.message);return{statusCode:500,headers,body:JSON.stringify({error:e.message,stack:e.stack})};}
 };

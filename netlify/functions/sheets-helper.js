@@ -526,6 +526,13 @@ async function getPriorityLists() {
   return lists;
 }
 // 会社の優先区分：2=スポンサー、1=協会顧問、0=なし
+function priorityFlags(company, lists) {
+  const c = _priorityNorm(company);
+  if (!c || !lists) return { sponsor: false, advisor: false };
+  const okRest = r => r === '' || /^(グルプ|ホルディングス|hd|holdings|group)$/.test(r) || /^.{0,8}(事務所|支店|支社|本店|本社|営業所)$/.test(r);
+  const hit = keys => keys.some(k => c === k || (k.length > 3 && c.startsWith(k) && okRest(c.slice(k.length))));
+  return { sponsor: hit(lists.sponsors), advisor: hit(lists.advisors) };
+}
 function priorityTier(company, lists) {
   const c = _priorityNorm(company);
   if (!c || !lists) return 0;
@@ -575,4 +582,4 @@ async function appendSystemLog(fn, userId, result, ms, detail) {
   } catch (e) { console.error('appendSystemLog error:', e.message); }
 }
 
-module.exports = { appendSystemLog, LOG_SHEET, getLastSurvey, getPriorityLists, priorityTier, changeRequestBalance, personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };
+module.exports = { priorityFlags, appendSystemLog, LOG_SHEET, getLastSurvey, getPriorityLists, priorityTier, changeRequestBalance, personKey, cardTime, isNewerCard, getIntroducedCompanies, getParticipants, getEmailMap, saveMatchHistory, getMatchHistory, getMonthlyRequestCount, getUserBalance, decrementUserBalance, setUserBalance, saveMatchResultsForReview, MONTHLY_LIMITS };

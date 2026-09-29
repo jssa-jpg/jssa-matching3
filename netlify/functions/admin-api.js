@@ -278,7 +278,7 @@ exports.handler=async(event)=>{
           const normCo2=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
           const uniq=[];const idxOf=new Map();
           results.forEach(r=>{const k=normCo2(r.company);if(!idxOf.has(k)){idxOf.set(k,uniq.length);uniq.push(r);}});
-          const surveyText=`${RULES.isNewSurvey(ap)?`- 会いたい相手の属性：${ap.attribute===RULES.OTHER?ap.attributeOther:ap.attribute}\n- 希望する業種・領域：${ap.industryDetail===RULES.OTHER?ap.industryOther:ap.industryDetail}\n- 面談の目的：${(ap.purposes||[]).map(p=>p===RULES.OTHER?ap.purposeOther:p).join('、')}\n- 会いたい部署・担当者：${(ap.departments||[]).map(p=>p===RULES.OTHER?ap.departmentOther:p).join('、')}\n`:`- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n`}- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n`;
+          const surveyText=`${ap.targetCompany?`- 会員が紹介を希望した会社：${ap.targetCompany}\n`:''}${ap.priority&&ap.priority!=='こだわらない'?`- 紹介先の種類：${ap.priority==='両方'?'スポンサー企業または協会顧問の会社':ap.priority==='スポンサー'?'スポンサー企業':'協会顧問の会社'}\n`:''}${RULES.isNewSurvey(ap)?`- 会いたい相手の属性：${ap.attribute===RULES.OTHER?ap.attributeOther:ap.attribute}\n- 希望する業種・領域：${ap.industryDetail===RULES.OTHER?ap.industryOther:ap.industryDetail}\n- 面談の目的：${(ap.purposes||[]).map(p=>p===RULES.OTHER?ap.purposeOther:p).join('、')}\n- 会いたい部署・担当者：${(ap.departments||[]).map(p=>p===RULES.OTHER?ap.departmentOther:p).join('、')}\n`:`- 希望業種：${(ap.industry||[]).join('、')||'こだわらない'}\n`}- 上場/未上場：${ap.listed||'こだわらない'}\n- 企業規模：${(ap.scale||[]).join('、')||'こだわらない'}\n`;
           // 1社ずつ同時にAIへ依頼する（まとめて頼むより早く、1社が遅れても他社は表示できる）。17秒で打ち切り、間に合わない会社は推薦理由なしで返す
           const askOne=async r=>{
             const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),17000);
