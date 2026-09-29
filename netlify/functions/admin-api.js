@@ -142,6 +142,38 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({success:true,batches:list})};
     }
 
+    if(action==='deleteBatch'){
+      // マッチング結果（1回の申込み分）を削除する。企業名送信済み・除外の行は、次回以降に同じ会社を案内しないための記録なので残す
+      // 消した行は「マッチング結果_削除分」シートに控えを残す
+      const{batchId}=body;
+      if(!batchId)return{statusCode:400,headers,body:JSON.stringify({error:'batchId is required'})};
+      const rows=await getSheet(token,'マッチング結果');
+      const keep=new Set(['企業名送信済み','除外']);
+      const targets=[];let kept=0;
+      rows.forEach((r,i)=>{if(i===0||r[0]!==batchId)return;if(keep.has(r[8]))kept++;else targets.push(i+1);});
+      if(!targets.length)return{statusCode:200,headers,body:JSON.stringify({success:true,deleted:0,kept})};
+      const SID=process.env.GOOGLE_SHEET_ID;
+      const auth={'Authorization':`Bearer ${token}`,'Content-Type':'application/json'};
+      const TRASH='マッチング結果_削除分';
+      const deletedAt=new Date(Date.now()+9*3600*1000).toISOString().replace('T',' ').slice(0,19);
+      const backup=targets.map(n=>{const r=rows[n-1];return[...Array.from({length:12},(_,k)=>r[k]||''),deletedAt];});
+      const appendUrl=`https://sheets.googleapis.com/v4/spreadsheets/${SID}/values/${encodeURIComponent(TRASH+'!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+      let ar=await fetch(appendUrl,{method:'POST',headers:auth,body:JSON.stringify({values:backup})});
+      if(!ar.ok){
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}:batchUpdate`,{method:'POST',headers:auth,body:JSON.stringify({requests:[{addSheet:{properties:{title:TRASH}}}]})});
+        ar=await fetch(appendUrl,{method:'POST',headers:auth,body:JSON.stringify({values:[[...(rows[0]||[]).slice(0,12),'削除日時（JST）'],...backup]})});
+        if(!ar.ok)return{statusCode:500,headers,body:JSON.stringify({error:'控えの保存に失敗したため削除を中止しました'})};
+      }
+      // 続いている行はまとめて、下の行から順に削除する（上から消すと行番号がずれるため）
+      const ranges=[];
+      targets.sort((a,b)=>a-b).forEach(n=>{const last=ranges[ranges.length-1];if(last&&last[1]===n-1)last[1]=n;else ranges.push([n,n]);});
+      const sheetId=await getSheetId(token,'マッチング結果');
+      const requests=ranges.reverse().map(([a,b])=>({deleteDimension:{range:{sheetId,dimension:'ROWS',startIndex:a-1,endIndex:b}}}));
+      const dr=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}:batchUpdate`,{method:'POST',headers:auth,body:JSON.stringify({requests})});
+      if(!dr.ok)return{statusCode:500,headers,body:JSON.stringify({error:'削除に失敗しました: '+(await dr.text()).slice(0,200)})};
+      return{statusCode:200,headers,body:JSON.stringify({success:true,deleted:targets.length,kept})};
+    }
+
     if(action==='searchBatch'){
       // マッチング結果（最大100社）の中から、会社名・部署・住所・会社概要にキーワードを含む会社を探す
       // キーワードはスペース区切りで複数指定でき、どれか1つを含めば該当（OR検索）

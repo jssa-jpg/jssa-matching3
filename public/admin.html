@@ -379,6 +379,21 @@ async function loadNextCompanies(batchId){
   }
 }
 
+async function deleteBatch(batchId){
+  const batch=matchBatches.find(b=>b.batchId===batchId);
+  if(!batch)return;
+  const sent=(batch.companies||[]).filter(c=>c.status==='企業名送信済み').length;
+  const d=batch.createdAt?new Date(new Date(batch.createdAt).getTime()+9*3600*1000).toISOString().slice(0,16).replace('T',' '):'';
+  if(!confirm(`${batch.userCompany||''} ${batch.userName||''}さんの ${d} のマッチング結果を削除しますか？\n\n・未通知の候補は削除され、管理画面から消えます（シート「マッチング結果_削除分」に控えが残ります）\n${sent?`・企業名送信済みの${sent}件は、案内の記録として残します\n`:''}・この操作は管理画面からは元に戻せません`))return;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'deleteBatch',batchId})});
+    const data=await res.json();
+    if(!data.success)throw new Error(data.error||'削除に失敗しました');
+    alert(`${data.deleted}件を削除しました。${data.kept?`（企業名送信済みなど${data.kept}件は残しています）`:''}`);
+    delete loadedDetails[batchId];
+    await loadMatchResults();
+  }catch(e){alert('エラー: '+e.message);}
+}
 async function changeMemberRank(batch){
   if(!batch.userId){alert('ユーザーIDが取得できませんでした');return;}
   const ranks=['レギュラーライト','レギュラー','プライム','ライト','特待生','投資先'];
@@ -849,6 +864,7 @@ function renderCards(){
         </div>`:''}
         <div class="actions" style="margin-top:6px">
           <button class="sel-btn" onclick='changeMemberRank(${JSON.stringify(b).replace(/'/g,"&#39;")})'>🎖 会員ランクを変更（現在: ${b.memberRank||'default'}）</button>
+          <button class="sel-btn" style="color:#991b1b;border-color:#fca5a5" onclick="deleteBatch('${b.batchId}')">🗑 このマッチング結果を削除</button>
           <button class="sel-btn" style="color:#991b1b;border-color:#fca5a5" onclick='deactivateUser(${JSON.stringify(b).replace(/'/g,"&#39;")})'>🚫 このユーザーを退会処理する</button>
         </div>
       </div>`;
