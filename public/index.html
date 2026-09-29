@@ -161,7 +161,6 @@ select option{background:#1a2030;color:#fff}
       <div class="field-label">紹介してほしい会社が決まっている場合 <span class="opt-badge">任意</span></div>
       <div class="t-row"><input type="text" class="t-input" id="t-input" placeholder="会社名を入力（例：三井住友信託銀行）" onkeydown="if(event.key==='Enter'){event.preventDefault();searchTarget();}"><button type="button" class="t-btn" id="t-btn" onclick="searchTarget()">検索</button></div>
       <div id="t-result"></div>
-      <div class="q-note">会社を選ぶと、①②は不要になり③面談の目的から回答します。決まっていない場合は空欄のまま進んでください。</div>
     </div>
     <div class="field" id="field-qp">
       <div class="field-label">紹介先の種類 <span class="req-badge">必須</span> <span class="multi-badge">1つ選択</span></div>
@@ -348,7 +347,9 @@ async function searchTarget(){
     const res=await fetch('/.netlify/functions/company-search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q})});
     const data=await res.json();
     if(!data.success)throw new Error(data.error||'検索に失敗しました');
-    if(!data.companies.length){box.innerHTML='<div class="t-msg none">該当する会社は登録されていません。</div>';return;}
+    // 検索し直したら指定を解除し、①②を表示する
+    targetCompany='';['field-qp','field-q1','field-q2'].forEach(id=>{document.getElementById(id).style.display='';});
+    if(!data.companies.length){box.innerHTML='<div class="t-msg none">該当する会社は登録されていません。下記の質問に回答をお願いします。</div>';return;}
     const more=data.total>data.companies.length?`（${data.total}社中${data.companies.length}社を表示。見つからない場合はもう少し詳しく入力してください）`:'';
     box.innerHTML=`<div class="t-msg">登録されている会社が見つかりました。紹介してほしい会社を選んでください。${more}</div><div class="chips" style="margin-top:6px">${data.companies.map(c=>`<button type="button" class="chip" data-v="${escHtml(c)}" onclick="chooseTarget(this.dataset.v)">${escHtml(c)}</button>`).join('')}</div>`;
   }catch(e){box.innerHTML=`<div class="t-msg none">${escHtml(e.message)}</div>`;}
