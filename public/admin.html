@@ -1106,7 +1106,7 @@ async function loadCompanyContacts(r){
       buildDefaultMsg(r,null);
       return;
     }
-    sel.innerHTML=currentContacts.map((c,i)=>`<option value="${i}">${c.name||'（氏名不明）'} / ${c.position||'役職不明'} / ${c.email||'メール不明'}</option>`).join('');
+    sel.innerHTML=currentContacts.map((c,i)=>`<option value="${i}">${c.prefecture||'地域不明'}／${c.name||'（氏名不明）'}／${c.position||'役職不明'}／${c.email||'メール不明'}</option>`).join('');
     sel.value='0';
     buildDefaultMsg(r,currentContacts[0]);
   }catch(e){
