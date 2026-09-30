@@ -807,7 +807,9 @@ function renderCards(){
   if(currentTab==='matches'){
     if(matchBatches.length===0){area.innerHTML='<div class="empty">マッチング結果はまだありません</div>';return;}
     area.innerHTML=matchBatches.map(b=>{
-      const statusBadge=b.status==='未通知'?'<span class="badge badge-new">⏳ 未通知</span>':'<span class="badge badge-done">✅ 企業名送信済み</span>';
+      // 1社でも企業名を送っていれば「送信済み（◯社）」と表示する（残りの候補は未通知のままなので、以前は「未通知」と表示されていた）
+      const sentCos=new Set((b.companies||[]).filter(c=>c.status==='企業名送信済み').map(c=>coNorm(c.targetCompany))).size;
+      const statusBadge=sentCos?`<span class="badge badge-done">✅ 企業名送信済み（${sentCos}社）</span>`:'<span class="badge badge-new">⏳ 未通知</span>';
       const loaded=loadedDetails[b.batchId]||[];
       const selSet=selectedCompanies[b.batchId]||new Set();
       const allGroups=batchGroups(b);
