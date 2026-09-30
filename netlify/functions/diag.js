@@ -41,7 +41,8 @@ exports.handler = async (event) => {
       br.forEach((r, i) => { const c = String(r[6] || ''); if (!seen.has(c)) { seen.set(c, { 順位: order.length + 1, 会社名: c, 行数: 0, 最初の行: i + 1, スコア: r[7] }); order.push(c); } seen.get(c).行数++; });
       const core = v => String(v || '').normalize('NFKC').replace(/[\s　]+/g, '').toLowerCase().replace(/株式会社|有限会社|合同会社|一般社団法人|一般財団法人|有限責任|\(株\)|㈱/g, '');
       const byCore = {}; order.forEach(c => { const k = core(c); (byCore[k] = byCore[k] || []).push(c); });
-      return { statusCode: 200, headers, body: JSON.stringify({ バッチ日時: br[0] ? jst(br[0][1]) : '', 行数: br.length, 会社数: order.length, 表記ゆれの疑い: Object.values(byCore).filter(a => a.length > 1), 会社一覧: order.map(c => seen.get(c)) }, null, 1) };
+      const stc = {}; br.forEach(r => { const k = r[8] || '未通知'; stc[k] = (stc[k] || 0) + 1; }); const sentCos = [...new Set(br.filter(r => r[8] === '企業名送信済み').map(r => r[6]))];
+      return { statusCode: 200, headers, body: JSON.stringify({ バッチ日時: br[0] ? jst(br[0][1]) : '', ステータス内訳: stc, 送信済みの会社: sentCos, 行数: br.length, 会社数: order.length, 表記ゆれの疑い: Object.values(byCore).filter(a => a.length > 1), 会社一覧: order.map(c => seen.get(c)) }, null, 1) };
     }
     if (qs.company) {
       // 会社名の一部で名刺を探し、属性・業種詳細・URL有無と、指定会員に案内済みかどうかを返す（氏名・連絡先は返さない）
