@@ -142,6 +142,28 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({success:true,batches:list})};
     }
 
+    if(action==='listInbound'){
+      // Resendで受信した返信メールの一覧（最新30通）と、会いたいリクエストに登録済みかどうか
+      const r=await fetch('https://api.resend.com/emails/receiving?limit=30',{headers:{'Authorization':`Bearer ${RESEND_API_KEY}`}});
+      const d=await r.json();
+      if(!r.ok)return{statusCode:500,headers,body:JSON.stringify({error:'受信メールを取得できませんでした: '+JSON.stringify(d).slice(0,200)})};
+      const reqRows=await getSheet(token,'会いたいリクエスト');
+      const marks=reqRows.map(x=>`${x[11]||''}${x[12]||''}`).join('\n');
+      const logRows=await getSheet(token,'システムログ');
+      const lastLog=id=>{for(let i=logRows.length-1;i>0;i--){const x=logRows[i];if(String(x[5]||'').includes(`mail=${id}`))return`${x[3]||''}${x[5]?'：'+String(x[5]).replace(/ 件名=.*$/,''):''}`;}return'';};
+      const list=(d.data||[]).map(m=>({id:m.id,from:m.from,to:m.to,subject:m.subject,createdAt:m.created_at,registered:marks.includes(`[mail:${m.id}]`),lastResult:lastLog(m.id)}));
+      return{statusCode:200,headers,body:JSON.stringify({success:true,emails:list})};
+    }
+
+    if(action==='reprocessInbound'){
+      // 受信した返信メールを、もう一度AIで読み取って登録する（登録済みのメールは二重登録しない）
+      const{emailId,from,to,subject}=body;
+      if(!emailId)return{statusCode:400,headers,body:JSON.stringify({error:'emailId is required'})};
+      const{processReceived}=require('./resend-inbound');
+      const r=await processReceived({emailId,fromRaw:from||'',toList:Array.isArray(to)?to:[to].filter(Boolean),subject:subject||'',source:'再処理'});
+      return{statusCode:200,headers,body:JSON.stringify({success:true,result:r.result,detail:r.detail})};
+    }
+
     if(action==='deleteBatch'){
       // マッチング結果（1回の申込み分）を削除する。企業名送信済み・除外の行は、次回以降に同じ会社を案内しないための記録なので残す
       // 消した行は「マッチング結果_削除分」シートに控えを残す

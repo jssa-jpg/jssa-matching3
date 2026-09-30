@@ -387,6 +387,32 @@ async function loadNextCompanies(batchId){
   }
 }
 
+// ===== 受信した返信メールの確認・再処理 =====
+let inboundList=[];
+async function openInbound(){
+  const box=document.getElementById('inbound-panel');if(!box)return;
+  box.innerHTML='<div style="font-size:12px;color:#6b7280;margin-top:8px">受信メールを確認しています…</div>';
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'listInbound'})});
+    const d=await res.json();
+    if(!d.success)throw new Error(d.error||'取得できませんでした');
+    inboundList=d.emails||[];
+    const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const dt=v=>{const t=Date.parse(v);return isNaN(t)?esc(v):new Date(t+9*3600*1000).toISOString().slice(5,16).replace('T',' ');};
+    box.innerHTML=inboundList.length?`<div style="font-size:12px;color:#6b7280;margin:8px 0">返信用アドレスに届いたメール（新しい順・最新30通）。「未登録」のメールは「再処理」でAIがもう一度読み取り、会いたいリクエストに登録します。</div><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#f9fafb"><th style="text-align:left;padding:6px">受信（日本時間）</th><th style="text-align:left;padding:6px">送信元</th><th style="text-align:left;padding:6px">件名</th><th style="text-align:left;padding:6px">状態</th><th></th></tr></thead><tbody>${inboundList.map((m,i)=>`<tr style="border-top:1px solid #f3f4f6"><td style="padding:6px;white-space:nowrap">${dt(m.createdAt)}</td><td style="padding:6px">${esc(m.from)}</td><td style="padding:6px">${esc(m.subject)}</td><td style="padding:6px" id="inb-st-${i}">${m.registered?'<span style="color:#15803d">✓ 登録済み</span>':`<span style="color:#b45309">未登録</span>${m.lastResult?`<div style="color:#6b7280;font-size:11px">前回：${esc(m.lastResult)}</div>`:''}`}</td><td style="padding:6px">${m.registered?'':`<button class="sel-btn" onclick="reprocessInbound(${i})">再処理</button>`}</td></tr>`).join('')}</tbody></table>`:'<div style="font-size:12px;color:#6b7280;margin-top:8px">受信メールはありません。</div>';
+  }catch(e){box.innerHTML=`<div style="color:#b91c1c;font-size:12px;margin-top:8px">エラー：${e.message}</div>`;}
+}
+async function reprocessInbound(i){
+  const m=inboundList[i];if(!m)return;
+  const st=document.getElementById('inb-st-'+i);if(st)st.textContent='処理中…（AIが読み取っています）';
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'reprocessInbound',emailId:m.id,from:m.from,to:m.to,subject:m.subject})});
+    const d=await res.json();
+    if(!d.success)throw new Error(d.error||'失敗しました');
+    if(st)st.innerHTML=`<b>${d.result}</b><div style="color:#6b7280;font-size:11px">${String(d.detail||'').replace(/[&<>"]/g,'')}</div>`;
+    if(d.result==='登録')await loadRequests();
+  }catch(e){if(st)st.textContent='エラー：'+e.message;}
+}
 async function deleteBatch(batchId){
   const batch=matchBatches.find(b=>b.batchId===batchId);
   if(!batch)return;
@@ -988,14 +1014,15 @@ function renderCards(){
   if(currentTab==='new')filtered=allRequests.filter(r=>r.status==='リクエスト受付'||r.status==='未処理');
   else if(currentTab==='done')filtered=allRequests.filter(r=>r.status==='推薦メール送信済');
   else if(currentTab==='ng')filtered=allRequests.filter(r=>r.status==='見送り');
-  if(filtered.length===0){area.innerHTML='<div class="empty">該当する依頼はありません</div>';return;}
+  const inboundBar=(currentTab==='all'||currentTab==='new')?`<div style="margin-bottom:12px"><button class="sel-btn" onclick="openInbound()">📥 受信した返信メールを確認・再処理</button><div id="inbound-panel"></div></div>`:'';
+  if(filtered.length===0){area.innerHTML=inboundBar+'<div class="empty">該当する依頼はありません</div>';return;}
   const getBadge=(s)=>{
     if(s==='リクエスト受付'||s==='未処理')return'<span class="badge badge-new">⏳ 未処理</span>';
     if(s==='推薦メール送信済')return'<span class="badge badge-done">✅ 承認済み</span>';
     if(s==='見送り')return'<span class="badge badge-ng">❌ 見送り</span>';
     return`<span class="badge">${s}</span>`;
   };
-  area.innerHTML=filtered.map(r=>`
+  area.innerHTML=inboundBar+filtered.map(r=>`
     <div class="card">
       <div class="card-head">
         <div><div class="card-title">${r.targetCompany||'—'}</div><div class="card-sub">${r.targetPosition||''} | ${r.createdAt?r.createdAt.slice(0,10):''}</div></div>

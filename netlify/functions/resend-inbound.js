@@ -10,7 +10,7 @@
 //   event: email.received で登録し、発行された signing secret を RESEND_WEBHOOK_SECRET に設定済み
 
 const crypto = require('crypto');
-const { changeRequestBalance } = require('./sheets-helper');
+const { changeRequestBalance, appendSystemLog } = require('./sheets-helper');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET;
@@ -209,6 +209,7 @@ exports.handler = async (event) => {
     const ok = verifySvixSignature(rawBody, hdrs, RESEND_WEBHOOK_SECRET);
     if (!ok) {
       console.error('Webhook署名検証に失敗しました');
+      try { await appendSystemLog('返信メール', '', '署名エラー', '', 'Webhookの署名検証に失敗（RESEND_WEBHOOK_SECRETを確認）'); } catch (e) {}
       return { statusCode: 401, body: 'Invalid signature' };
     }
   } else {
@@ -223,11 +224,25 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: 'ignored' };
   }
 
+  const d = payload.data || {};
+  const res = await processReceived({ emailId: d.email_id, fromRaw: d.from || '', toList: d.to || [], subject: d.subject || '' });
+  return { statusCode: 200, body: res.body };
+};
+
+// 受信メール1通を処理する（Webhookから、または管理画面の「再処理」から呼ばれる）
+// 結果はシート「システムログ」に1行残す
+async function processReceived({ emailId, fromRaw, toList, subject, source }) {
+  const t0 = Date.now();
+  const fromEmail0 = extractEmailAddress(fromRaw || '');
+  const log = async (result, detail) => { try { await appendSystemLog('返信メール' + (source ? '(' + source + ')' : ''), fromEmail0, result, Date.now() - t0, `${detail || ''} 件名=${String(subject || '').slice(0, 60)} mail=${emailId || ''}`); } catch (e) {} };
+  const r = await processReceivedInner({ emailId, fromRaw, toList: Array.isArray(toList) ? toList : [toList].filter(Boolean), subject: subject || '' });
+  await log(r.result, r.detail);
+  return r;
+}
+
+async function processReceivedInner({ emailId, fromRaw, toList, subject }) {
+  const done = (result, detail, body) => ({ result, detail: detail || '', body: body || result });
   try {
-    const emailId = payload.data.email_id;
-    const fromRaw = payload.data.from || '';
-    const toList = payload.data.to || [];
-    const subject = payload.data.subject || '';
     const fromEmail = extractEmailAddress(fromRaw);
 
     // 1. 受信メール本文を取得（Webhook自体には本文が含まれないため別途API呼び出しが必要）
@@ -240,11 +255,11 @@ exports.handler = async (event) => {
 
     if (!fromEmail) {
       console.log('送信元メールアドレスを取得できませんでした');
-      return { statusCode: 200, body: 'skipped(no from)' };
+      return done('スキップ', '送信元なし', 'skipped(no from)');
     }
     if (!bodyText) {
       console.log('本文が空のためスキップ:', fromEmail);
-      return { statusCode: 200, body: 'skipped(empty body)' };
+      return done('スキップ', `本文が空（本文取得API ${emailRes.status}）`, 'skipped(empty body)');
     }
 
     const token = await getToken();
@@ -254,7 +269,7 @@ exports.handler = async (event) => {
     const alreadyProcessed = existingRequests.some(r => `${r[11] || ''}${r[12] || ''}`.includes(`[mail:${emailId}]`));
     if (alreadyProcessed) {
       console.log('既に処理済みのメールです:', emailId);
-      return { statusCode: 200, body: 'duplicate, skipped' };
+      return done('処理済み', '同じメールを登録済み', 'duplicate, skipped');
     }
 
     // 3. どのマッチング結果への返信かを特定する
@@ -305,7 +320,7 @@ exports.handler = async (event) => {
         `【要確認】対応するマッチング結果が見つからない返信（${fromEmail}）`,
         `件名「${subject}」のメールが ${fromEmail} から届きましたが、対応する「企業名送信済み」のマッチング結果が見つかりませんでした。\nお手数ですが内容をご確認のうえ、必要であれば管理画面から手動で登録してください。\n\n---本文---\n${bodyText.slice(0, 1500)}`
       );
-      return { statusCode: 200, body: 'no matching batch' };
+      return done('対象なし', `宛先=${(toList || []).join(',')} バッチ=${targetBatchId || '-'}`, 'no matching batch');
     }
 
     // 候補は実際にメールで案内した「企業名送信済み」の企業に限定する（未案内の企業が誤って選ばれるのを防ぐ）
@@ -325,7 +340,7 @@ exports.handler = async (event) => {
         `【返信あり】${userCompany || ''}${userName || ''}様から返信（${extraction.noneRequested ? '該当なし' : '企業名を自動検出できず'}）`,
         `会員から返信がありましたが、${extraction.noneRequested ? '「該当なし」等、希望企業がない旨の返信でした。' : 'AIが企業名を自動検出できませんでした。内容をご確認のうえ、必要であれば管理画面から手動登録してください。'}\n\n会員：${userCompany} ${userName}（${userEmail}）\n\n---元の返信メール---\n${bodyText.slice(0, 1500)}\n\n${extraction.note || ''}`
       );
-      return { statusCode: 200, body: 'no companies requested' };
+      return done(extraction.noneRequested ? '該当なし' : '企業名を検出できず', `候補${candidateCompanies.length}社 ${extraction.note || ''}`, 'no companies requested');
     }
 
     // 5. 「会いたいリクエスト」シートに1社ずつ登録（既存の管理画面フローにそのまま乗せる）
@@ -359,11 +374,13 @@ exports.handler = async (event) => {
       `会員からの返信メールをAIが自動解析し、以下の企業を「会いたいリクエスト」に登録しました。\n（ステータス：未処理・要確認）\n\n■ 会員\n${userCompany} ${userName} 様\n${userEmail}\n\n■ 検出した企業\n${extraction.companies.map(c => '・' + c).join('\n')}${balanceText}\n\n■ 元の返信メール\n${bodyText.slice(0, 1000)}\n\n────────────────\n管理画面の「ユーザー返信」タブで内容を確認し、問題なければ担当者の選定と推薦メールの送信を行ってください。`
     );
 
-    return { statusCode: 200, body: JSON.stringify({ success: true, detected: extraction.companies }) };
+    return done('登録', extraction.companies.join('、'), JSON.stringify({ success: true, detected: extraction.companies }));
   } catch (e) {
     console.error('resend-inbound エラー:', e.message);
     try { await sendOfficeMail('【エラー】返信メール自動処理に失敗', `resend-inbound Functionでエラーが発生しました:\n${e.message}`); } catch (_) {}
     // Resendにエラーを返すとリトライされ続けるため、内部エラーは200で受け取り済みとして扱う
-    return { statusCode: 200, body: 'error handled' };
+    return done('エラー', e.message, 'error handled');
   }
-};
+}
+
+exports.processReceived = processReceived;
