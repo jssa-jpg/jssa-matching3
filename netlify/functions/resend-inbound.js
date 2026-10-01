@@ -107,6 +107,8 @@ function trimQuotedText(text) {
     /日本スタートアップ支援協会（JSSA）の岡隆宏です。/,
     /登録された希望条件をもとに、私が相性の良い企業様を選定しました/,
     /【マッチング企業一覧】/,
+    /ご指定いただいた企業への紹介について、確認が取れましたので案内します/,
+    /【ご指定の企業】/,
   ];
   let cutIndex = text.length;
   for (const re of markers) {
@@ -120,7 +122,7 @@ function trimQuotedText(text) {
 function extractNumberedList(text) {
   // 元メールの一覧部分（【マッチング企業一覧】以降）があればそこから抽出。返信本文側の「2. ○○でお願いします」を拾わないため
   const src = text || '';
-  const idx = src.lastIndexOf('【マッチング企業一覧】');
+  const idx = Math.max(src.lastIndexOf('【マッチング企業一覧】'), src.lastIndexOf('【ご指定の企業】'));
   const target = idx >= 0 ? src.slice(idx) : src;
   const map = new Map();
   const re = /^[\s>]*(\d{1,2})\s*[\.．、)）]\s*(.+?)\s*$/gm;
@@ -156,6 +158,7 @@ ${bodyText.slice(0, 3000)}
 会社名が書かれている場合は会社名を最優先してください。番号だけで指定されている場合は、上の「元メールでの番号付き一覧」の番号で解釈してください。
 一覧にない企業名を新しく作らないでください。
 「該当なし」「今回は見送り」「希望する企業がない」など、希望企業がないという趣旨の返信の場合は none_requested を true にしてください。
+候補企業が1社だけで、返信が「お願いします」「進めてください」「希望します」など紹介を進める趣旨の場合は、その1社を選んでください。「取りやめ」「キャンセル」「やめておきます」などの場合は none_requested を true にしてください。
 判断に迷う場合は無理に含めず、空配列のままにしてください。
 
 以下のJSON形式のみで出力してください。前置きや説明文は不要です。
