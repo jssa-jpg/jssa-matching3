@@ -152,7 +152,7 @@ exports.handler=async(event)=>{
       const byEmail=new Map();participants.forEach(p=>{const e=String(p.email||'').trim().toLowerCase();if(e&&!byEmail.has(e))byEmail.set(e,p);});
       const users=await getSheet(token,'ユーザー登録');
       const userByEmail=new Map();users.slice(1).forEach(u=>{const e=String(u[5]||'').trim().toLowerCase();if(e)userByEmail.set(e,u);});
-      const kind=sub=>/^【ご紹介】/.test(sub)?'推薦（紹介先へ）':/マッチング企業のご案内|ご指定企業へのご紹介/.test(sub)?'企業名案内（会員へ）':/返信|自動検出|要確認|エラー/.test(sub)?'事務局への通知':'その他';
+      const kind=sub=>/^【控え】/.test(sub)?'控え（事務局へ）':/^【ご紹介】/.test(sub)?'推薦（紹介先へ）':/マッチング企業のご案内|ご指定企業へのご紹介/.test(sub)?'企業名案内（会員へ）':/返信|自動検出|要確認|エラー/.test(sub)?'事務局への通知':'その他';
       const emails=(d.data||[]).map(m=>{
         const to=(Array.isArray(m.to)?m.to:[m.to]).filter(Boolean);
         const first=String(to[0]||'').replace(/^.*</,'').replace(/>.*$/,'').trim().toLowerCase();
@@ -531,11 +531,21 @@ exports.handler=async(event)=>{
       const targetHeader=`${targetCompany||''}${toPosition?' '+toPosition:''}${toName?' '+toName+'様':' 担当者様'}`;
       // 管理画面で編集した本文には署名が含まれないため、送信時に自動で署名を付ける（既に含まれていれば付けない）
       const mailText=emailBody?(emailBody.includes('代表理事　岡　隆宏')?emailBody:`${emailBody.trim()}\n\n${SIGNATURE}`):`${targetHeader}\n\n日本スタートアップ支援協会（JSSA）の岡隆宏と申します。\n平素よりお世話になっております。\n\nこの度、弊協会の会員企業より、貴社との面談・情報交換のご希望をいただきましたので、ご紹介させていただきます。\n${recommendText}\n【ご紹介する会員】\n会社名：${memberCompany||'—'}\n役職　：${memberPosition||'—'}\n氏名　：${memberName||'—'}\nメール：${memberEmail||'—'}\n会社HP：${memberWebsite||'—'}\nFacebook：${memberFacebook||'—'}\n\nご都合がよろしければ、直接${memberName}様にご連絡いただけますと幸いです。\nご不明な点がございましたら、私（岡）までお気軽にご連絡ください。\n\n今後ともどうぞよろしくお願いいたします。\n\n${SIGNATURE}`;
-      const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'tok@yumeplanning.jp',to:[toEmail],bcc:[OFFICE_EMAIL],reply_to:OFFICE_EMAIL,subject:`【ご紹介】${memberCompany} ${memberName}様のご紹介`,html:`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:10px;"><div style="background:#0B0F1A;padding:14px 20px;border-radius:8px;margin-bottom:20px;"><span style="background:#639922;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;">JSSA</span><span style="color:#fff;font-size:13px;margin-left:8px;">日本スタートアップ支援協会</span></div><div style="font-size:14px;color:#374151;line-height:1.8;">${mailText.replace(/\n/g,'<br>')}</div></div>`})});
+      const recSubject=`【ご紹介】${memberCompany} ${memberName}様のご紹介`;
+      const wrapHtml=t=>`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:10px;"><div style="background:#0B0F1A;padding:14px 20px;border-radius:8px;margin-bottom:20px;"><span style="background:#639922;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;">JSSA</span><span style="color:#fff;font-size:13px;margin-left:8px;">日本スタートアップ支援協会</span></div><div style="font-size:14px;color:#374151;line-height:1.8;">${t.replace(/\n/g,'<br>')}</div></div>`;
+      // 控えはBCCではなく、事務局宛ての別メールとして送る（自分宛てのBCCは受信トレイに入らないことがあるため）
+      const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'tok@yumeplanning.jp',to:[toEmail],reply_to:OFFICE_EMAIL,subject:recSubject,html:`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:10px;"><div style="background:#0B0F1A;padding:14px 20px;border-radius:8px;margin-bottom:20px;"><span style="background:#639922;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;">JSSA</span><span style="color:#fff;font-size:13px;margin-left:8px;">日本スタートアップ支援協会</span></div><div style="font-size:14px;color:#374151;line-height:1.8;">${mailText.replace(/\n/g,'<br>')}</div></div>`})});
       const resData=await res.json();
       if(!res.ok)return{statusCode:500,headers,body:JSON.stringify({error:'メール送信失敗: '+JSON.stringify(resData)})};
+      let copied=true;
+      try{
+        const sentAt=new Date(Date.now()+9*3600*1000).toISOString().slice(0,16).replace('T',' ');
+        const head=`━━━━━━━━━━━━━━━━━━━━\n【控え】紹介先へ推薦メールを送信しました\n送信日時：${sentAt}\n送信先：${targetCompany||''}${toPosition?' '+toPosition:''} ${toName||''}様（${toEmail}）\nご紹介した会員：${memberCompany||''} ${memberName||''}様（${memberEmail||''}）\n※このメールは控えです。返信すると岡代表宛てに届きます。\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+        const cr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'tok@yumeplanning.jp',to:[OFFICE_EMAIL],subject:`【控え】${recSubject}（送信先：${targetCompany||''} ${toName||''}様）`,html:wrapHtml(head+mailText)})});
+        copied=cr.ok;
+      }catch(e){copied=false;console.error('控えメールの送信エラー:',e.message);}
       if(rowIndex)await updateCell(token,'会いたいリクエスト',rowIndex,'E','推薦メール送信済');
-      return{statusCode:200,headers,body:JSON.stringify({success:true,message:'推薦メールを送信しました'})};
+      return{statusCode:200,headers,body:JSON.stringify({success:true,message:copied?'推薦メールを送信しました（控えを事務局に送信）':'推薦メールを送信しました（控えの送信に失敗しました）'})};
     }
 
     if(action==='updateMemberRank'){
