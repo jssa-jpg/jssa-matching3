@@ -479,12 +479,18 @@ async function sendCompanyNames(batch){
 function addRequestFromReply(batch){
   isDetailOpen=true;
   const area=document.getElementById('detail-area');
-  const uniqueCompanies=[...new Set((batch.companies||[]).map(c=>c.targetCompany).filter(Boolean))];
-  const checkboxes=uniqueCompanies.map((c,i)=>`<label class="ms-item"><input type="checkbox" value="${c.replace(/"/g,'&quot;')}" id="wish-ck-${i}">${c}</label>`).join('');
+  // 会社ごとに1行。企業名を案内済みの会社（会員が選ぶのは通常この中から）を先頭に並べる
+  const seenCo=new Map();
+  (batch.companies||[]).forEach(c=>{if(!c.targetCompany)return;const k=coNorm(c.targetCompany);if(!seenCo.has(k))seenCo.set(k,{name:c.targetCompany,sent:false});if(c.status==='企業名送信済み')seenCo.get(k).sent=true;});
+  const cos=[...seenCo.values()].sort((a,b)=>(b.sent-a.sent));
+  const escA=v=>String(v).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  const checkboxes=cos.map((c,i)=>`<label class="wish-item" data-name="${escA(c.name.normalize('NFKC').toLowerCase())}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:13px;${c.sent?'background:#f0fdf4;':''}"><input type="checkbox" value="${escA(c.name)}" id="wish-ck-${i}" onchange="wishCount()" style="flex:none;width:16px;height:16px"><span style="flex:1">${escA(c.name)}</span>${c.sent?'<span style="flex:none;font-size:11px;color:#15803d;background:#dcfce7;border-radius:10px;padding:1px 8px">案内済み</span>':''}</label>`).join('');
   area.innerHTML=`<div class="detail-wrap" id="detail-box" style="display:block">
     <div class="detail-head"><div class="detail-title">💬 ユーザー希望企業を登録：${batch.userName||batch.userCompany}様</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
-    <label class="edit-label">① マッチ企業の候補から選択（複数選択可）</label>
-    <div class="company-list" style="max-height:220px;overflow-y:auto">${checkboxes||'<div style="padding:8px;color:#6b7280;font-size:12px">候補がありません</div>'}</div>
+    <p style="font-size:12px;color:#6b7280;margin:0 0 10px;line-height:1.7">会員が電話・メッセンジャーなど、案内メールへの返信以外で会いたい企業を伝えてきたときに使います。チェックした会社は1社ずつ「会いたいリクエスト」（未処理）に登録され、<b>会員のリクエスト回数が1社につき1回減ります</b>。登録後は「ユーザー返信」タブから担当者選択・推薦メール送信に進みます。</p>
+    <label class="edit-label">① マッチ企業の候補から選択（複数選択可）<span id="wish-count" style="margin-left:8px;color:#15803d"></span></label>
+    <input type="text" placeholder="会社名で絞り込み" oninput="wishFilter(this.value)" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;margin-bottom:6px">
+    <div style="max-height:320px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px">${checkboxes||'<div style="padding:8px;color:#6b7280;font-size:12px">候補がありません</div>'}</div>
     <label class="edit-label" style="margin-top:12px">② 候補にない企業を追加する場合（1行に1社ずつ入力）</label>
     <textarea id="wish-manual" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px" placeholder="候補にない企業名があれば、1行に1社ずつ入力してください"></textarea>
     <div class="detail-actions">
@@ -495,6 +501,8 @@ function addRequestFromReply(batch){
   area.scrollIntoView({behavior:'smooth'});
 }
 
+function wishFilter(q){const k=String(q||'').normalize('NFKC').toLowerCase().trim();document.querySelectorAll('.wish-item').forEach(el=>{el.style.display=!k||el.dataset.name.includes(k)?'flex':'none';});}
+function wishCount(){const n=document.querySelectorAll('.wish-item input:checked').length;const el=document.getElementById('wish-count');if(el)el.textContent=n?`${n}社を選択中（リクエスト${n}回分）`:'';}
 async function submitWishCompany(batch){
   const checked=Array.from(document.querySelectorAll('#detail-area input[type=checkbox]:checked')).map(c=>c.value);
   const manual=document.getElementById('wish-manual').value.split('\n').map(s=>s.trim()).filter(Boolean);
