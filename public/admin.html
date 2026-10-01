@@ -163,8 +163,9 @@ textarea:focus{border-color:#639922}
       <button class="tab" onclick="setTab('done')">承認済み</button>
       <button class="tab" onclick="setTab('ng')">却下</button>
       <button class="tab tab-trash" onclick="setTab('trash')">🗑 ゴミ箱</button>
+      <button class="tab" onclick="setTab('sent')">📤 送信履歴</button>
       <button class="tab tab-enrich" onclick="setTab('enrich')">🤖 AI情報補完</button>
-      <button class="btn-refresh" onclick="currentTab==='enrich'?renderEnrichPanel():currentTab==='matches'?loadMatchResults():loadRequests()">🔄 更新</button>
+      <button class="btn-refresh" onclick="currentTab==='enrich'?renderEnrichPanel():currentTab==='sent'?loadSent(true):currentTab==='matches'?loadMatchResults():loadRequests()">🔄 更新</button>
     </div>
     <div id="detail-area"></div>
     <div id="cards-area"><div class="empty">読み込み中...</div></div>
@@ -540,6 +541,64 @@ function updateStats(){
 // ===== AI情報補完：名刺データのO〜W列（業種〜企業特徴）が空の行をAIで埋める =====
 let enrichTargets=[],enrichRunning=false,enrichStop=false,enrichStats={ok:0,ng:0};
 function enrichEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+// ===== 送信履歴（Resendで送ったメール） =====
+let sentEmails=[],sentNext='',sentHasMore=false,sentLoading=false;
+const SENT_EV={delivered:'配信済み',opened:'開封済み',clicked:'リンククリック',bounced:'不達',complained:'迷惑メール報告',sent:'送信済み',delivery_delayed:'配信遅延',queued:'送信待ち',scheduled:'予約',failed:'失敗'};
+function renderSentPanel(){
+  document.getElementById('cards-area').innerHTML=`<div class="enrich-wrap">
+    <h3>送信履歴</h3>
+    <p class="enrich-lead">管理画面から送ったメールの記録です（新しい順）。宛先のメールアドレスから、名刺データの会社名・氏名・役職・都道府県を表示します。行の「本文」を押すと、実際に送った本文を表示します。</p>
+    <div class="enrich-actions" style="flex-wrap:wrap">
+      <select id="sent-kind" onchange="drawSent()" style="padding:8px;border:1px solid #d1d5db;border-radius:8px">
+        <option value="推薦（紹介先へ）">紹介先への推薦メール</option>
+        <option value="企業名案内（会員へ）">会員への企業名案内</option>
+        <option value="">すべて（事務局への通知を含む）</option>
+      </select>
+      <input id="sent-q" type="text" placeholder="会社名・氏名・メールアドレス・件名で絞り込み" oninput="drawSent()" style="flex:1;min-width:240px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px">
+    </div>
+    <div class="enrich-summary" id="sent-summary"></div>
+    <div id="sent-list"></div>
+  </div>`;
+  if(!sentEmails.length)loadSent(true);else drawSent();
+}
+async function loadSent(reset){
+  if(sentLoading)return;sentLoading=true;
+  const sum=document.getElementById('sent-summary');if(sum)sum.textContent='送信履歴を読み込んでいます…';
+  try{
+    if(reset){sentEmails=[];sentNext='';}
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'listSentEmails',after:reset?'':sentNext})});
+    const d=await res.json();
+    if(!d.success)throw new Error(d.error||'取得できませんでした');
+    sentEmails=sentEmails.concat(d.emails||[]);sentNext=d.next||'';sentHasMore=!!d.hasMore;
+  }catch(e){if(sum)sum.textContent='エラー：'+e.message;sentLoading=false;return;}
+  sentLoading=false;drawSent();
+}
+function drawSent(){
+  const box=document.getElementById('sent-list');if(!box)return;
+  const kind=(document.getElementById('sent-kind')||{}).value||'';
+  const q=String((document.getElementById('sent-q')||{}).value||'').normalize('NFKC').toLowerCase().trim();
+  const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const dt=v=>{const t=Date.parse(v);return isNaN(t)?esc(v):new Date(t+9*3600*1000).toISOString().slice(0,16).replace('T',' ');};
+  const list=sentEmails.map((m,i)=>({m,i})).filter(({m})=>(!kind||m.kind===kind)&&(!q||[m.subject,...(m.to||[]),m.recipient&&m.recipient.company,m.recipient&&m.recipient.name].join(' ').normalize('NFKC').toLowerCase().includes(q)));
+  document.getElementById('sent-summary').innerHTML=`${list.length}通を表示（読み込み済み ${sentEmails.length}通）${sentHasMore?'':'／これ以上古い履歴はありません'}`;
+  box.innerHTML=(list.length?`<div class="enrich-log" style="max-height:none"><table><thead><tr><th>送信日時</th><th>種類</th><th>宛先</th><th>件名</th><th>状態</th><th></th></tr></thead><tbody>${list.map(({m,i})=>{const r=m.recipient;const who=r?`<b>${esc(r.company)}</b><br>${esc(r.prefecture?r.prefecture+'／':'')}${esc(r.name)}${r.position?'／'+esc(r.position):''}${r.member?'（会員）':''}<br>`:'';return`<tr><td style="white-space:nowrap">${dt(m.createdAt)}</td><td style="white-space:nowrap">${esc(m.kind)}</td><td>${who}<span style="color:#6b7280">${esc((m.to||[]).join(', '))}</span></td><td>${esc(m.subject)}</td><td style="white-space:nowrap">${esc(SENT_EV[m.lastEvent]||m.lastEvent||'—')}</td><td><button class="sel-btn" onclick="toggleSentBody(${i})">本文</button></td></tr><tr id="sent-body-${i}" style="display:none"><td colspan="6"></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">該当するメールはありません</div>')
+    +(sentHasMore?`<div style="text-align:center;margin-top:12px"><button class="load-more-btn" onclick="loadSent(false)">さらに古い履歴を読み込む（100通）</button></div>`:'');
+}
+async function toggleSentBody(i){
+  const row=document.getElementById('sent-body-'+i);if(!row)return;
+  if(row.style.display!=='none'){row.style.display='none';return;}
+  row.style.display='';const cell=row.firstElementChild;
+  if(cell.dataset.loaded)return;
+  cell.innerHTML='<div style="color:#6b7280;font-size:12px;padding:8px">本文を読み込んでいます…</div>';
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getSentEmail',id:sentEmails[i].id})});
+    const d=await res.json();
+    if(!d.success)throw new Error(d.error||'取得できませんでした');
+    cell.innerHTML='';const f=document.createElement('iframe');f.setAttribute('sandbox','');f.style.cssText='width:100%;height:520px;border:1px solid #e5e7eb;border-radius:8px;background:#fff';
+    f.srcdoc=d.html||`<pre style="white-space:pre-wrap;font-family:sans-serif">${String(d.text||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+    cell.appendChild(f);cell.dataset.loaded='1';
+  }catch(e){cell.innerHTML=`<div style="color:#b91c1c;font-size:12px;padding:8px">エラー：${e.message}</div>`;}
+}
 function renderEnrichPanel(){
   if(enrichRunning)return;
   document.getElementById('cards-area').innerHTML=`
@@ -822,6 +881,7 @@ function setTab(tab){
   document.getElementById('detail-area').innerHTML='';
   isDetailOpen=false;
   if(tab==='enrich'){renderEnrichPanel();return;}
+  if(tab==='sent'){renderSentPanel();return;}
   if(tab==='trash'){loadTrash();}
   else if(tab==='matches'){loadMatchResults();}
   else{renderCards();}
@@ -829,6 +889,7 @@ function setTab(tab){
 
 function renderCards(){
   if(currentTab==='enrich')return; // AI情報補完の実行中に画面が書き換わらないようにする
+  if(currentTab==='sent')return;
   const area=document.getElementById('cards-area');
   if(currentTab==='matches'){
     if(matchBatches.length===0){area.innerHTML='<div class="empty">マッチング結果はまだありません</div>';return;}

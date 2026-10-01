@@ -142,6 +142,38 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({success:true,batches:list})};
     }
 
+    if(action==='listSentEmails'){
+      // Resendで送信したメールの一覧（新しい順・100通ずつ）。宛先のメールアドレスから名刺データの会社名・氏名を引いて付ける
+      const after=body.after?`&after=${encodeURIComponent(body.after)}`:'';
+      const r=await fetch(`https://api.resend.com/emails?limit=100${after}`,{headers:{'Authorization':`Bearer ${RESEND_API_KEY}`}});
+      const d=await r.json();
+      if(!r.ok)return{statusCode:500,headers,body:JSON.stringify({error:'送信履歴を取得できませんでした: '+JSON.stringify(d).slice(0,200)})};
+      const participants=await getParticipants();
+      const byEmail=new Map();participants.forEach(p=>{const e=String(p.email||'').trim().toLowerCase();if(e&&!byEmail.has(e))byEmail.set(e,p);});
+      const users=await getSheet(token,'ユーザー登録');
+      const userByEmail=new Map();users.slice(1).forEach(u=>{const e=String(u[5]||'').trim().toLowerCase();if(e)userByEmail.set(e,u);});
+      const kind=sub=>/^【ご紹介】/.test(sub)?'推薦（紹介先へ）':/マッチング企業のご案内|ご指定企業へのご紹介/.test(sub)?'企業名案内（会員へ）':/返信|自動検出|要確認|エラー/.test(sub)?'事務局への通知':'その他';
+      const emails=(d.data||[]).map(m=>{
+        const to=(Array.isArray(m.to)?m.to:[m.to]).filter(Boolean);
+        const first=String(to[0]||'').replace(/^.*</,'').replace(/>.*$/,'').trim().toLowerCase();
+        const p=byEmail.get(first);const u=userByEmail.get(first);
+        return{id:m.id,to,subject:m.subject||'',createdAt:m.created_at,lastEvent:m.last_event||'',kind:kind(m.subject||''),
+          recipient:p?{company:p.company,name:p.name,position:p.position,department:p.department,prefecture:p.prefecture||''}:(u?{company:u[2]||'',name:u[4]||'',position:u[3]||'',member:true}:null)};
+      });
+      const last=(d.data||[]).length?(d.data[d.data.length-1].id):'';
+      return{statusCode:200,headers,body:JSON.stringify({success:true,emails,hasMore:!!d.has_more,next:last})};
+    }
+
+    if(action==='getSentEmail'){
+      // 送信したメール1通の本文
+      const{id}=body;
+      if(!id)return{statusCode:400,headers,body:JSON.stringify({error:'id is required'})};
+      const r=await fetch(`https://api.resend.com/emails/${encodeURIComponent(id)}`,{headers:{'Authorization':`Bearer ${RESEND_API_KEY}`}});
+      const d=await r.json();
+      if(!r.ok)return{statusCode:500,headers,body:JSON.stringify({error:'本文を取得できませんでした: '+JSON.stringify(d).slice(0,200)})};
+      return{statusCode:200,headers,body:JSON.stringify({success:true,html:d.html||'',text:d.text||'',bcc:d.bcc||[],lastEvent:d.last_event||''})};
+    }
+
     if(action==='listInbound'){
       // Resendで受信した返信メールの一覧（最新30通）と、会いたいリクエストに登録済みかどうか
       const r=await fetch('https://api.resend.com/emails/receiving?limit=30',{headers:{'Authorization':`Bearer ${RESEND_API_KEY}`}});
