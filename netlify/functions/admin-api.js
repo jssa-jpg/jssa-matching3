@@ -84,6 +84,23 @@ async function appendRow(token,sheetName,values){
   });
 }
 
+// 複数セルをまとめて書き込む（[{range:'シート!A1', value:'…'}]）
+async function writeCells(token,cells){
+  if(!cells.length)return;
+  const id=process.env.GOOGLE_SHEET_ID;
+  for(let i=0;i<cells.length;i+=400){
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values:batchUpdate`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:cells.slice(i,i+400).map(c=>({range:c.range,values:[[c.value]]}))})});
+  }
+}
+// 会いたいリクエストの進捗列（N〜S）。見出しが無ければ作る
+const REQ_PROGRESS_HEADER=['推薦メール送信日時','推薦メール送信先','紹介先の回答','回答日時','3者メール送信日時','完了日時'];
+async function ensureReqProgressHeader(token){
+  const id=process.env.GOOGLE_SHEET_ID;
+  const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent('会いたいリクエスト!N1:S1')}`,{headers:{'Authorization':`Bearer ${token}`}});
+  const v=((await r.json()).values||[[]])[0]||[];
+  if(v[0]!==REQ_PROGRESS_HEADER[0])await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent('会いたいリクエスト!N1:S1')}?valueInputOption=RAW`,{method:'PUT',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({values:[REQ_PROGRESS_HEADER]})});
+}
+
 function checkAuth(event){
   const auth=(event.headers.authorization||'').replace('Bearer ','');
   const xauth=event.headers['x-admin-password']||'';
@@ -140,6 +157,68 @@ exports.handler=async(event)=>{
       }
       const list=Object.values(batches).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
       return{statusCode:200,headers,body:JSON.stringify({success:true,batches:list})};
+    }
+
+    if(action==='getProgress'){
+      // 申込みから完了までの進捗を1行ずつにまとめる
+      const [mr,rq,users,memo]=await Promise.all([getSheet(token,'マッチング結果'),getSheet(token,'会いたいリクエスト'),getSheet(token,'ユーザー登録'),getSheet(token,'進捗メモ')]);
+      const closedBatch=new Map();memo.slice(1).forEach(r=>{if(r[0]&&r[1])closedBatch.set(r[0],{state:r[1],at:r[2]||''});});
+      const userMap=new Map();users.slice(1).forEach(u=>{if(u[0])userMap.set(String(u[0]).trim(),{company:u[2]||'',name:u[4]||'',email:u[5]||''});});
+      const batches=new Map();
+      mr.slice(1).forEach(r=>{
+        const id=r[0];if(!id)return;
+        if(!batches.has(id)){let ap={};try{ap=JSON.parse(r[9]||'{}');}catch(e){}batches.set(id,{batchId:id,createdAt:r[1]||'',userId:r[2]||'',company:r[3]||'',name:r[4]||'',email:r[5]||'',designated:ap.targetCompany||'',priority:ap.priority||'',sent:[],sentAt:'',total:new Set()});}
+        const b=batches.get(id);b.total.add(RULES.companyKey(r[6]));
+        if(r[8]==='企業名送信済み'){if(!b.sent.includes(r[6]))b.sent.push(r[6]);if(r[12]&&r[12]>b.sentAt)b.sentAt=r[12];if(!b.sentAt)b.sentAt='済';}
+      });
+      const blist=[...batches.values()].map(b=>({...b,total:b.total.size}));
+      const rows=[];const linked=new Set();
+      rq.slice(1).forEach((r,i)=>{
+        if(!r[0])return;
+        const req={rowIndex:i+2,requestId:r[0]||'',userId:r[1]||'',targetCompany:r[2]||'',targetPosition:r[3]||'',status:r[4]||'リクエスト受付',createdAt:r[5]||'',updatedAt:r[6]||'',memberCompany:r[7]||'',memberName:r[8]||'',memberEmail:r[9]||'',message:r[10]||'',matchReason:r[11]||'',recommendation:r[12]||'',
+          recAt:r[13]||'',recTo:r[14]||'',answer:r[15]||'',answerAt:r[16]||'',threeAt:r[17]||'',doneAt:r[18]||''};
+        // どの申込みへの返信か：その会社を案内済みの申込み → なければ、リクエストより前の最新の申込み
+        const tk=RULES.companyKey(req.targetCompany);
+        const mine=blist.filter(b=>b.userId===req.userId).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+        const b=mine.find(x=>x.sent.some(c=>RULES.companyKey(c)===tk))||mine.find(x=>String(x.createdAt)<=String(req.createdAt))||null;
+        if(b)linked.add(b.batchId);
+        rows.push({type:'request',batch:b?{batchId:b.batchId,createdAt:b.createdAt,sentAt:b.sentAt,sentCount:b.sent.length,designated:b.designated}:null,req});
+      });
+      // まだ会員から希望が来ていない申込み（会員ごとに最新の1件だけ）
+      const latestByUser=new Map();
+      blist.forEach(b=>{const cur=latestByUser.get(b.userId);if(!cur||String(b.createdAt)>String(cur.createdAt))latestByUser.set(b.userId,b);});
+      for(const b of latestByUser.values()){
+        if(linked.has(b.batchId))continue;
+        const u=userMap.get(String(b.userId).trim())||{};
+        rows.push({type:'batch',batch:{batchId:b.batchId,createdAt:b.createdAt,sentAt:b.sentAt,sentCount:b.sent.length,total:b.total,designated:b.designated,priority:b.priority,closed:closedBatch.get(b.batchId)||null},member:{userId:b.userId,company:b.company||u.company||'',name:b.name||u.name||'',email:b.email||u.email||''}});
+      }
+      return{statusCode:200,headers,body:JSON.stringify({success:true,rows,now:new Date().toISOString()})};
+    }
+
+    if(action==='setProgress'){
+      // 進捗を記録する：answer（紹介先の回答 OK/NG）、three（3者メール送信）、done（完了）。value を空にすると取り消し
+      const{rowIndex,field,value}=body;
+      if(!rowIndex||!['answer','three','done'].includes(field))return{statusCode:400,headers,body:JSON.stringify({error:'指定が正しくありません'})};
+      await ensureReqProgressHeader(token);
+      const now=new Date().toISOString();
+      const cells=field==='answer'?[{range:`会いたいリクエスト!P${rowIndex}`,value:value||''},{range:`会いたいリクエスト!Q${rowIndex}`,value:value?now:''}]
+        :field==='three'?[{range:`会いたいリクエスト!R${rowIndex}`,value:value?now:''}]
+        :[{range:`会いたいリクエスト!S${rowIndex}`,value:value?now:''}];
+      await writeCells(token,cells);
+      return{statusCode:200,headers,body:JSON.stringify({success:true})};
+    }
+
+    if(action==='closeBatch'){
+      // 返信が来ない・該当なしの申込みを進捗一覧から外す（「進捗メモ」シートに記録。value空で取り消し）
+      const{batchId,state}=body;
+      if(!batchId)return{statusCode:400,headers,body:JSON.stringify({error:'batchId is required'})};
+      const SID=process.env.GOOGLE_SHEET_ID;const auth={'Authorization':`Bearer ${token}`,'Content-Type':'application/json'};
+      let rows=await getSheet(token,'進捗メモ');
+      if(!rows.length){await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}:batchUpdate`,{method:'POST',headers:auth,body:JSON.stringify({requests:[{addSheet:{properties:{title:'進捗メモ'}}}]})});await appendRow(token,'進捗メモ',['バッチID','状態','日時']);rows=[['バッチID']];}
+      const idx=rows.findIndex(r=>r[0]===batchId);
+      if(idx>0)await writeCells(token,[{range:`進捗メモ!B${idx+1}`,value:state||''},{range:`進捗メモ!C${idx+1}`,value:state?new Date().toISOString():''}]);
+      else if(state)await appendRow(token,'進捗メモ',[batchId,state,new Date().toISOString()]);
+      return{statusCode:200,headers,body:JSON.stringify({success:true})};
     }
 
     if(action==='listSentEmails'){
@@ -416,7 +495,9 @@ exports.handler=async(event)=>{
       const resData=await res.json();
       if(!res.ok)return{statusCode:500,headers,body:JSON.stringify({error:'メール送信失敗: '+JSON.stringify(resData)})};
       if(Array.isArray(rowIndexes)){
-        for(const idx of rowIndexes){await updateCell(token,'マッチング結果',idx,'I','企業名送信済み');}
+        // ステータス（I列）と企業名の送信日時（M列）を記録する
+        const nowIso=new Date().toISOString();
+        await writeCells(token,[{range:'マッチング結果!M1',value:'企業名送信日時'},...rowIndexes.flatMap(idx=>[{range:`マッチング結果!I${idx}`,value:'企業名送信済み'},{range:`マッチング結果!M${idx}`,value:nowIso}])]);
       }
       // ※リクエスト回数は企業名の案内時ではなく、会員が会いたい企業を返信（リクエスト）した時点で減らす
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:'企業名一覧を送信しました'})};
@@ -545,7 +626,10 @@ exports.handler=async(event)=>{
         const cr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'tok@yumeplanning.jp',to:[OFFICE_EMAIL],subject:`【控え】${recSubject}（送信先：${targetCompany||''} ${toName||''}様）`,html:wrapHtml(head+mailText)})});
         copied=cr.ok;
       }catch(e){copied=false;console.error('控えメールの送信エラー:',e.message);}
-      if(rowIndex)await updateCell(token,'会いたいリクエスト',rowIndex,'E','推薦メール送信済');
+      if(rowIndex){
+        await ensureReqProgressHeader(token);
+        await writeCells(token,[{range:`会いたいリクエスト!E${rowIndex}`,value:'推薦メール送信済'},{range:`会いたいリクエスト!N${rowIndex}`,value:new Date().toISOString()},{range:`会いたいリクエスト!O${rowIndex}`,value:`${targetCompany||''} ${toName||''}（${toEmail}）`}]);
+      }
       return{statusCode:200,headers,body:JSON.stringify({success:true,message:copied?'推薦メールを送信しました（控えを事務局に送信）':'推薦メールを送信しました（控えの送信に失敗しました）'})};
     }
 

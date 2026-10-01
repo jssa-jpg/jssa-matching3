@@ -158,6 +158,7 @@ textarea:focus{border-color:#639922}
     </div>
     <div class="tabs">
       <button class="tab active" onclick="setTab('matches')">📋 マッチング結果</button>
+      <button class="tab" onclick="setTab('progress')">📈 進捗</button>
       <button class="tab" onclick="setTab('all')">ユーザー返信</button>
       <button class="tab" onclick="setTab('new')">未処理</button>
       <button class="tab" onclick="setTab('done')">承認済み</button>
@@ -165,7 +166,7 @@ textarea:focus{border-color:#639922}
       <button class="tab tab-trash" onclick="setTab('trash')">🗑 ゴミ箱</button>
       <button class="tab" onclick="setTab('sent')">📤 送信履歴</button>
       <button class="tab tab-enrich" onclick="setTab('enrich')">🤖 AI情報補完</button>
-      <button class="btn-refresh" onclick="currentTab==='enrich'?renderEnrichPanel():currentTab==='sent'?loadSent(true):currentTab==='matches'?loadMatchResults():loadRequests()">🔄 更新</button>
+      <button class="btn-refresh" onclick="currentTab==='enrich'?renderEnrichPanel():currentTab==='sent'?loadSent(true):currentTab==='progress'?loadProgress():currentTab==='matches'?loadMatchResults():loadRequests()">🔄 更新</button>
     </div>
     <div id="detail-area"></div>
     <div id="cards-area"><div class="empty">読み込み中...</div></div>
@@ -222,6 +223,7 @@ async function loadRequests(silent=false){
     document.getElementById('main-wrap').style.display='block';
     updateStats();
     renderCards();
+    if(currentTab==='progress'&&!silent&&!isDetailOpen)loadProgress();
     startAutoRefresh();
   }catch(e){
     if(!silent)alert('通信エラー: '+e.message);
@@ -549,6 +551,116 @@ function updateStats(){
 // ===== AI情報補完：名刺データのO〜W列（業種〜企業特徴）が空の行をAIで埋める =====
 let enrichTargets=[],enrichRunning=false,enrichStop=false,enrichStats={ok:0,ng:0};
 function enrichEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+// ===== 進捗（申込みから完了まで） =====
+let progRows=[],progNow=Date.now(),progFilter='mine';
+const PSTAGES=['①申込み','②企業の提案','③会員の希望','④推薦メール','⑤紹介先の回答','⑥3者メール','⑦完了'];
+async function loadProgress(){
+  const area=document.getElementById('cards-area');
+  if(!document.getElementById('prog-wrap'))area.innerHTML='<div class="empty">進捗を読み込んでいます…</div>';
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'getProgress'})});
+    const d=await res.json();
+    if(!d.success)throw new Error(d.error||'取得できませんでした');
+    progRows=(d.rows||[]).map(buildProg);progNow=Date.parse(d.now)||Date.now();
+    drawProgress();
+  }catch(e){area.innerHTML=`<div class="empty">エラー：${e.message}</div>`;}
+}
+// 1行分の各段階の日時と「次にやること」を決める
+function buildProg(row){
+  const b=row.batch||{},q=row.req||null;
+  const st=[];const done=v=>({at:v||'',done:!!v});
+  st[0]=done(b.createdAt);
+  st[1]=done(b.sentAt);
+  let next=null,closed=null,who='';
+  if(row.type==='batch'){
+    st[2]=done('');st[3]=done('');st[4]=done('');st[5]=done('');st[6]=done('');
+    if(b.closed){closed=b.closed.state||'終了';}
+    else if(!b.sentAt){next={i:1,label:'企業を選定して提案する',mine:true};}
+    else{next={i:2,label:'会員の返信待ち',mine:false};}
+  }else{
+    st[2]=done(q.createdAt);
+    const recDone=q.recAt||(q.status==='推薦メール送信済'?'済':'');
+    st[3]=done(recDone);
+    st[4]={at:q.answerAt||'',done:!!q.answer,val:q.answer};
+    st[5]=done(q.threeAt);st[6]=done(q.doneAt);
+    if(!st[1].done&&st[2].done)st[1]={at:'済',done:true};
+    if(q.status==='見送り'&&!recDone){closed='見送り（事務局）';}
+    else if(q.doneAt){closed='完了';}
+    else if(q.answer==='NG'){closed='紹介先NG';}
+    else if(!recDone){next={i:3,label:'推薦メールを送る',mine:true};}
+    else if(!q.answer){next={i:4,label:'紹介先の回答待ち',mine:false};}
+    else if(!q.threeAt){next={i:5,label:'3者メールを送る',mine:true};}
+    else{next={i:6,label:'完了にする',mine:true};}
+  }
+  // 直前に終わった段階からの経過日数
+  let lastAt='';for(const x of st){if(x.done&&x.at&&x.at!=='済')lastAt=x.at;}
+  const member=row.type==='batch'?row.member:{userId:q.userId,company:q.memberCompany,name:q.memberName,email:q.memberEmail};
+  return{row,st,next,closed,member,lastAt};
+}
+function progDays(at){const t=Date.parse(at);if(isNaN(t))return null;return Math.floor((progNow-t)/86400000);}
+function progFmt(at){if(!at)return'';if(at==='済')return'済';const t=Date.parse(at);if(isNaN(t))return at;return new Date(t+9*3600*1000).toISOString().slice(5,16).replace('T',' ').replace('-','/');}
+function drawProgress(){
+  const area=document.getElementById('cards-area');
+  const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const mine=progRows.filter(p=>p.next&&p.next.mine),wait=progRows.filter(p=>p.next&&!p.next.mine),fin=progRows.filter(p=>p.closed);
+  const list=(progFilter==='mine'?mine:progFilter==='wait'?wait:progFilter==='fin'?fin:progRows).slice()
+    .sort((a,b)=>((b.next&&b.next.mine)-(a.next&&a.next.mine))||((progDays(b.lastAt)||0)-(progDays(a.lastAt)||0)));
+  const chip=(k,label,n,color)=>`<button onclick="progFilter='${k}';drawProgress()" style="padding:8px 14px;border-radius:20px;border:1px solid ${progFilter===k?color:'#d1d5db'};background:${progFilter===k?color:'#fff'};color:${progFilter===k?'#fff':'#374151'};font-weight:700;font-size:13px;cursor:pointer">${label} ${n}</button>`;
+  const cell=(p,i)=>{
+    const x=p.st[i];
+    if(x.done){const ng=i===4&&x.val==='NG';return`<td style="padding:6px 4px;white-space:nowrap;color:${ng?'#b91c1c':'#15803d'};font-size:11.5px">${ng?'✕ NG':'✓'} ${esc(progFmt(x.at))}${i===4&&!ng?'<br><span style="font-size:11px">面談OK</span>':''}${[4,5,6].includes(i)&&p.row.req?`<br><a href="#" onclick="undoProg(${progRows.indexOf(p)},${i});return false" style="font-size:10px;color:#9ca3af">取消</a>`:''}</td>`;}
+    if(p.next&&p.next.i===i){const d=progDays(p.lastAt);const late=d!=null&&d>=3;return`<td style="padding:6px;white-space:nowrap;background:${p.next.mine?'#fff7ed':'#f8fafc'};font-size:12px;font-weight:700;color:${p.next.mine?'#c2410c':'#475569'}">${p.next.mine?'● 対応待ち':'… 返信待ち'}${d!=null?`<br><span style="font-weight:400;color:${late?'#b91c1c':'#6b7280'}">${d}日経過</span>`:''}</td>`;}
+    return'<td style="padding:6px;color:#d1d5db;text-align:center">—</td>';
+  };
+  const actions=p=>{
+    const k=progRows.indexOf(p);
+    if(p.closed)return`<span style="font-size:12px;color:#6b7280">${esc(p.closed)}</span>${p.row.type==='batch'?` <a href="#" onclick="closeProgBatch(${k},'');return false" style="font-size:11px;color:#9ca3af">戻す</a>`:''}`;
+    const n=p.next;if(!n)return'';
+    const btn=(label,fn,primary)=>`<button class="sel-btn" style="margin:2px;${primary?'background:#639922;color:#fff;border-color:#639922':''}" onclick="${fn}">${label}</button>`;
+    if(n.i===1)return btn('マッチング結果を開く',"setTab('matches');document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.textContent.includes('マッチング結果')))",true)+btn('終了にする',`closeProgBatch(${k},'終了')`);
+    if(n.i===2)return btn('終了にする（返信なし・該当なし）',`closeProgBatch(${k},'終了')`);
+    if(n.i===3)return btn('担当者を選んで推薦',`progOpenDetail(${k})`,true);
+    if(n.i===4)return btn('面談OK',`setProg(${k},'answer','OK')`,true)+btn('NG',`setProg(${k},'answer','NG')`);
+    if(n.i===5)return btn('3者メール送信済みにする',`setProg(${k},'three','1')`,true);
+    if(n.i===6)return btn('完了にする',`setProg(${k},'done','1')`,true);
+    return'';
+  };
+  area.innerHTML=`<div id="prog-wrap" class="enrich-wrap" style="max-width:none">
+    <h3>進捗</h3>
+    <p class="enrich-lead">会員の申込みから完了までを、紹介先ごとに1行で表示します。オレンジの「● 対応待ち」が岡代表の次の作業、グレーの「… 返信待ち」は相手からの返信待ちです。3日以上止まっている行は経過日数が赤くなります。日時は日本時間、「済」は日時の記録がない以前の作業です。</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${chip('mine','対応が必要',mine.length,'#c2410c')}${chip('wait','相手の返信待ち',wait.length,'#475569')}${chip('fin','完了・終了',fin.length,'#15803d')}${chip('all','すべて',progRows.length,'#111827')}</div>
+    ${list.length?`<div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:1000px"><thead><tr style="background:#f9fafb;font-size:11px;color:#6b7280"><th style="padding:8px;text-align:left">会員</th><th style="padding:8px;text-align:left">紹介先</th>${PSTAGES.map(x=>`<th style="padding:8px;text-align:left;white-space:nowrap">${x}</th>`).join('')}<th style="padding:8px;text-align:left">次にやること</th></tr></thead><tbody>${list.map(p=>{const q=p.row.req,b=p.row.batch||{};const target=q?`<b>${esc(q.targetCompany)}</b>${q.recTo?`<br><span style="font-size:11px;color:#6b7280">${esc(q.recTo.replace(/（.*）/,''))}</span>`:''}`:(b.designated?`<span style="font-size:12px">🎯 ${esc(b.designated)}（指定）</span>`:`<span style="font-size:12px;color:#6b7280">${b.sentCount?`${b.sentCount}社を提案済み`:`候補${b.total||0}社から選定`}${b.priority&&b.priority!=='こだわらない'?`／${esc(b.priority==='両方'?'スポンサー・顧問':b.priority)}`:''}</span>`);return`<tr style="border-top:1px solid #f3f4f6"><td style="padding:8px"><b>${esc(p.member.company)}</b><br><span style="font-size:12px">${esc(p.member.name)}</span></td><td style="padding:8px">${target}</td>${[0,1,2,3,4,5,6].map(i=>cell(p,i)).join('')}<td style="padding:6px">${p.next?`<div style="font-size:12px;font-weight:700;margin-bottom:2px;color:${p.next.mine?'#c2410c':'#475569'}">${esc(p.next.label)}</div>`:''}${actions(p)}</td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">該当する案件はありません</div>'}
+  </div>`;
+}
+async function setProg(k,field,value){
+  const p=progRows[k];if(!p||!p.row.req)return;
+  const label=field==='answer'?(value==='OK'?'紹介先から「面談OK」の回答があった':'紹介先から「NG」の回答があった'):field==='three'?'3者メールを送信した':'この案件を完了にする';
+  if(!confirm(`${p.member.company} ${p.member.name}様 → ${p.row.req.targetCompany}\n「${label}」として記録しますか？`))return;
+  await progCall({action:'setProgress',rowIndex:p.row.req.rowIndex,field,value});
+}
+async function undoProg(k,i){
+  const p=progRows[k];if(!p||!p.row.req)return;
+  const field=i===4?'answer':i===5?'three':'done';
+  if(!confirm(`「${PSTAGES[i]}」の記録を取り消しますか？`))return;
+  await progCall({action:'setProgress',rowIndex:p.row.req.rowIndex,field,value:''});
+}
+async function closeProgBatch(k,state){
+  const p=progRows[k];if(!p)return;
+  if(state&&!confirm(`${p.member.company} ${p.member.name}様の申込みを「終了」にして、進捗一覧の対応中から外しますか？（「完了・終了」で確認でき、戻すこともできます）`))return;
+  await progCall({action:'closeBatch',batchId:p.row.batch.batchId,state});
+}
+async function progCall(payload){
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify(payload)});
+    const d=await res.json();if(!d.success)throw new Error(d.error||'失敗しました');
+    await loadProgress();
+  }catch(e){alert('エラー: '+e.message);}
+}
+function progOpenDetail(k){
+  const p=progRows[k];if(!p||!p.row.req)return;
+  openDetail(p.row.req);
+  const a=document.getElementById('detail-area');if(a)a.scrollIntoView({behavior:'smooth'});
+}
 // ===== 送信履歴（Resendで送ったメール） =====
 let sentEmails=[],sentNext='',sentHasMore=false,sentLoading=false;
 const SENT_EV={delivered:'配信済み',opened:'開封済み',clicked:'リンククリック',bounced:'不達',complained:'迷惑メール報告',sent:'送信済み',delivery_delayed:'配信遅延',queued:'送信待ち',scheduled:'予約',failed:'失敗'};
@@ -884,12 +996,14 @@ function jstTime(iso){const x=jstParts(iso);return x?x.time:'--:--';}
 
 function setTab(tab){
   currentTab=tab;
+  const ctn=document.querySelector('.container');if(ctn)ctn.style.maxWidth=tab==='progress'?'1440px':'';
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(typeof event!=='undefined'&&event.target)event.target.classList.add('active');
   document.getElementById('detail-area').innerHTML='';
   isDetailOpen=false;
   if(tab==='enrich'){renderEnrichPanel();return;}
   if(tab==='sent'){renderSentPanel();return;}
+  if(tab==='progress'){loadProgress();return;}
   if(tab==='trash'){loadTrash();}
   else if(tab==='matches'){loadMatchResults();}
   else{renderCards();}
@@ -897,7 +1011,7 @@ function setTab(tab){
 
 function renderCards(){
   if(currentTab==='enrich')return; // AI情報補完の実行中に画面が書き換わらないようにする
-  if(currentTab==='sent')return;
+  if(currentTab==='sent'||currentTab==='progress')return;
   const area=document.getElementById('cards-area');
   if(currentTab==='matches'){
     if(matchBatches.length===0){area.innerHTML='<div class="empty">マッチング結果はまだありません</div>';return;}
