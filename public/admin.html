@@ -153,7 +153,7 @@ textarea:focus{border-color:#639922}
     <div class="stats">
       <div class="stat-card"><div class="stat-num" id="stat-total">0</div><div class="stat-label">合計依頼数</div></div>
       <div class="stat-card"><div class="stat-num orange" id="stat-new">0</div><div class="stat-label">未処理</div></div>
-      <div class="stat-card"><div class="stat-num green" id="stat-done">0</div><div class="stat-label">承認済み</div></div>
+      <div class="stat-card"><div class="stat-num green" id="stat-done">0</div><div class="stat-label">推薦メール送信済み</div></div>
       <div class="stat-card"><div class="stat-num red" id="stat-ng">0</div><div class="stat-label">却下</div></div>
     </div>
     <div class="tabs">
@@ -161,7 +161,7 @@ textarea:focus{border-color:#639922}
       <button class="tab" onclick="setTab('progress')">📈 進捗</button>
       <button class="tab" onclick="setTab('all')">ユーザー返信</button>
       <button class="tab" onclick="setTab('new')">未処理</button>
-      <button class="tab" onclick="setTab('done')">承認済み</button>
+      <button class="tab" onclick="setTab('done')">推薦メール送信済み</button>
       <button class="tab" onclick="setTab('ng')">却下</button>
       <button class="tab tab-trash" onclick="setTab('trash')">🗑 ゴミ箱</button>
       <button class="tab" onclick="setTab('sent')">📤 送信履歴</button>
@@ -1201,7 +1201,7 @@ function renderCards(){
   if(filtered.length===0){area.innerHTML=inboundBar+'<div class="empty">該当する依頼はありません</div>';return;}
   const getBadge=(s)=>{
     if(s==='リクエスト受付'||s==='未処理')return'<span class="badge badge-new">⏳ 未処理</span>';
-    if(s==='推薦メール送信済')return'<span class="badge badge-done">✅ 承認済み</span>';
+    if(s==='推薦メール送信済')return'<span class="badge badge-done">📨 推薦メール送信済み</span>';
     if(s==='見送り')return'<span class="badge badge-ng">❌ 見送り</span>';
     return`<span class="badge">${s}</span>`;
   };
@@ -1223,7 +1223,7 @@ function renderCards(){
       ${r.matchReason?`<div class="reason-box">🎯 ${hx(r.matchReason)}</div>`:''}
       ${r.message?`<div class="msg-box" style="white-space:pre-wrap;max-height:160px;overflow:auto">${hx(r.message)}</div>`:''}
       <div class="actions">
-        <button class="btn-approve" onclick="openDetail(window._reqCards[${i}])">✅ 担当者選択・推薦メール</button>
+        ${r.status==='推薦メール送信済'?`<button class="btn-approve" style="background:#9ca3af" onclick="openDetail(window._reqCards[${i}])">🔁 送信済み（再送する場合）</button>`:`<button class="btn-approve" onclick="openDetail(window._reqCards[${i}])">✅ 担当者選択・推薦メール</button>`}
         <button class="btn-decline" onclick="doDecline(window._reqCards[${i}])">❌ 見送り</button>
         <button class="btn-delete" onclick="doDelete(window._reqCards[${i}])" title="ゴミ箱へ">🗑</button>
       </div>
@@ -1233,6 +1233,8 @@ function renderCards(){
 const hxs=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let currentDetailReq=null;
 function openDetail(r){
+  // 推薦メールを送信済みのリクエストは、二重送信を防ぐため確認してから開く
+  if(r&&r.status==='推薦メール送信済'&&!confirm(`「${r.targetCompany||''}」には、すでに推薦メールを送信済みです。\n\nもう一度送りますか？（送ると紹介先に同じ推薦メールが2通届きます）`))return;
   isDetailOpen=true;
   currentDetailReq=r;
   const area=document.getElementById('detail-area');
@@ -1404,7 +1406,7 @@ async function doDecline(r){
 }
 
 async function doDelete(r){
-  if(!confirm(`このリクエストをゴミ箱に移動しますか？\n（未処理のリクエストを削除すると、会員のリクエスト回数が1回戻ります。見送り・承認済みのものは戻りません）`))return;
+  if(!confirm(`このリクエストをゴミ箱に移動しますか？\n（未処理のリクエストを削除すると、会員のリクエスト回数が1回戻ります。見送り・推薦メール送信済みのものは戻りません）`))return;
   try{
     const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'delete',rowIndex:r.rowIndex,requestId:r.requestId,userId:r.userId,targetCompany:r.targetCompany,targetPosition:r.targetPosition,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,memberCompany:r.memberCompany,memberName:r.memberName,memberEmail:r.memberEmail,message:r.message,matchReason:r.matchReason,recommendation:r.recommendation})});
     const data=await res.json();
