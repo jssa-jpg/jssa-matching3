@@ -1205,41 +1205,45 @@ function renderCards(){
     if(s==='見送り')return'<span class="badge badge-ng">❌ 見送り</span>';
     return`<span class="badge">${s}</span>`;
   };
-  area.innerHTML=inboundBar+filtered.map(r=>`
+  // 会員の返信本文には「<tok@…>」などメールの引用記号が入るため、必ずエスケープして表示する（そのまま入れると以降のボタンが表示されなくなる）
+  const hx=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  window._reqCards=filtered;
+  area.innerHTML=inboundBar+filtered.map((r,i)=>`
     <div class="card">
       <div class="card-head">
-        <div><div class="card-title">${r.targetCompany||'—'}</div><div class="card-sub">${r.targetPosition||''} | ${r.createdAt?r.createdAt.slice(0,10):''}</div></div>
+        <div><div class="card-title">${hx(r.targetCompany||'—')}</div><div class="card-sub">${hx(r.targetPosition||'')} | ${r.createdAt?hx(r.createdAt.slice(0,10)):''}</div></div>
         ${getBadge(r.status)}
       </div>
       <div class="card-body">
-        <div class="info-item"><div class="label">依頼者会社</div><div class="value">${r.memberCompany||'—'}</div></div>
-        <div class="info-item"><div class="label">依頼者名</div><div class="value">${r.memberName||'—'}</div></div>
-        <div class="info-item"><div class="label">依頼者メール</div><div class="value">${r.memberEmail||'—'}</div></div>
-        <div class="info-item"><div class="label">依頼日時</div><div class="value">${r.createdAt?r.createdAt.slice(0,10):''}</div></div>
+        <div class="info-item"><div class="label">依頼者会社</div><div class="value">${hx(r.memberCompany||'—')}</div></div>
+        <div class="info-item"><div class="label">依頼者名</div><div class="value">${hx(r.memberName||'—')}</div></div>
+        <div class="info-item"><div class="label">依頼者メール</div><div class="value">${hx(r.memberEmail||'—')}</div></div>
+        <div class="info-item"><div class="label">依頼日時</div><div class="value">${r.createdAt?hx(r.createdAt.slice(0,10)):''}</div></div>
       </div>
-      ${r.matchReason?`<div class="reason-box">🎯 ${r.matchReason}</div>`:''}
-      ${r.message?`<div class="msg-box">${r.message}</div>`:''}
+      ${r.matchReason?`<div class="reason-box">🎯 ${hx(r.matchReason)}</div>`:''}
+      ${r.message?`<div class="msg-box" style="white-space:pre-wrap;max-height:160px;overflow:auto">${hx(r.message)}</div>`:''}
       <div class="actions">
-        <button class="btn-approve" onclick='openDetail(${JSON.stringify(r).replace(/'/g,"&#39;")})'>✅ 担当者選択</button>
-        <button class="btn-decline" onclick='doDecline(${JSON.stringify(r).replace(/'/g,"&#39;")})'>❌ 見送り</button>
-        <button class="btn-delete" onclick='doDelete(${JSON.stringify(r).replace(/'/g,"&#39;")})' title="ゴミ箱へ">🗑</button>
+        <button class="btn-approve" onclick="openDetail(window._reqCards[${i}])">✅ 担当者選択・推薦メール</button>
+        <button class="btn-decline" onclick="doDecline(window._reqCards[${i}])">❌ 見送り</button>
+        <button class="btn-delete" onclick="doDelete(window._reqCards[${i}])" title="ゴミ箱へ">🗑</button>
       </div>
     </div>`).join('');
 }
 
+const hxs=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let currentDetailReq=null;
 function openDetail(r){
   isDetailOpen=true;
   currentDetailReq=r;
   const area=document.getElementById('detail-area');
   area.innerHTML=`<div class="detail-wrap" id="detail-box" style="display:block">
-    <div class="detail-head"><div class="detail-title">📨 推薦メール送信：${r.targetCompany||''}</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
+    <div class="detail-head"><div class="detail-title">📨 推薦メール送信：${hxs(r.targetCompany||'')}</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
     <div class="from-box"><div class="from-label">✅ 申請者情報</div><div class="from-info">
-      <div><b>会社名：</b>${r.memberCompany||'—'}</div>
-      <div><b>氏名　：</b>${r.memberName||'—'}</div>
-      <div><b>メール：</b>${r.memberEmail||'—'}</div>
-      ${r.matchReason?`<div style="margin-top:8px;color:#639922;font-weight:600">🎯 ${r.matchReason}</div>`:''}
-      ${r.recommendation?`<div style="margin-top:4px;color:#374151">${r.recommendation}</div>`:''}
+      <div><b>会社名：</b>${hxs(r.memberCompany||'—')}</div>
+      <div><b>氏名　：</b>${hxs(r.memberName||'—')}</div>
+      <div><b>メール：</b>${hxs(r.memberEmail||'—')}</div>
+      ${r.matchReason?`<div style="margin-top:8px;color:#639922;font-weight:600">🎯 ${hxs(r.matchReason)}</div>`:''}
+      ${r.recommendation?`<div style="margin-top:4px;color:#374151">${hxs(r.recommendation)}</div>`:''}
     </div></div>
     <label class="edit-label">① 送信先の役職者を選択</label>
     <select id="contact-select" onchange="onContactChange()" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px">
