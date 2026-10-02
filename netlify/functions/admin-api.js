@@ -630,16 +630,20 @@ exports.handler=async(event)=>{
       const{targetCompany}=body;
       if(!targetCompany)return{statusCode:400,headers,body:JSON.stringify({error:'企業名が指定されていません'})};
       const participants=await getParticipants();
-      const seen=new Set();
       // 表記ゆれ（スペース・法人格の違い）も同じ会社として探す。全国に社員がいる会社はエリアがわかるよう都道府県を付け、都道府県順に並べる
       const tk=RULES.companyKey(targetCompany);
       const PREF_ORDER=['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県'];
       const ord=p=>{const i=PREF_ORDER.indexOf(p);return i<0?99:i;};
-      const contacts=participants.filter(p=>p.company===targetCompany||RULES.companyKey(p.company)===tk).filter(p=>{
+      // 同じ人の名刺が複数ある場合は、名刺交換日が新しい方を残す。表示用に名刺交換日（YYYY/MM/DD）も返し、同じ都道府県内は交換日が新しい順に並べる
+      const fmtDate=v=>{const t=cardTime(v);if(!t)return'';const d=new Date(t);return`${d.getUTCFullYear()}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}`;};
+      const byKey=new Map();
+      participants.filter(p=>p.company===targetCompany||RULES.companyKey(p.company)===tk).forEach(p=>{
         const key=p.email||`${p.name}_${p.position}`;
-        if(seen.has(key))return false;seen.add(key);return true;
-      }).map(p=>({name:p.name||'',position:p.position||'',email:p.email||'',department:p.department||'',prefecture:p.prefecture||''}))
-        .sort((a,b)=>ord(a.prefecture)-ord(b.prefecture));
+        const cur=byKey.get(key);
+        if(!cur||isNewerCard(p,cur))byKey.set(key,p);
+      });
+      const contacts=[...byKey.values()].map(p=>({name:p.name||'',position:p.position||'',email:p.email||'',department:p.department||'',prefecture:p.prefecture||'',cardDate:fmtDate(p.cardDate),_t:cardTime(p.cardDate)}))
+        .sort((a,b)=>ord(a.prefecture)-ord(b.prefecture)||b._t-a._t).map(({_t,...c})=>c);
       return{statusCode:200,headers,body:JSON.stringify({success:true,contacts})};
     }
 
