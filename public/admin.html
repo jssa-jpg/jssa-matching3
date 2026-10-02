@@ -186,7 +186,7 @@ function doLogin(){
   if(!pw){return;}
   adminPassword=pw;
   document.getElementById('login-err').style.display='none';
-  loadMatchResults();
+  loadMatchResults().then(()=>loadRequests(true)); // 件数表示とユーザー返信タブ用に、リクエストも読み込んでおく
 }
 
 function logout(){
@@ -1006,7 +1006,7 @@ function setTab(tab){
   if(tab==='progress'){loadProgress();return;}
   if(tab==='trash'){loadTrash();}
   else if(tab==='matches'){loadMatchResults();}
-  else{renderCards();}
+  else{renderCards();loadRequests(true);} // タブを開くたびに最新のリクエストを読み込む
 }
 
 function renderCards(){
