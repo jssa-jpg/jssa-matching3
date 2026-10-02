@@ -1227,8 +1227,10 @@ function renderCards(){
     </div>`).join('');
 }
 
+let currentDetailReq=null;
 function openDetail(r){
   isDetailOpen=true;
+  currentDetailReq=r;
   const area=document.getElementById('detail-area');
   area.innerHTML=`<div class="detail-wrap" id="detail-box" style="display:block">
     <div class="detail-head"><div class="detail-title">📨 推薦メール送信：${r.targetCompany||''}</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
@@ -1240,7 +1242,7 @@ function openDetail(r){
       ${r.recommendation?`<div style="margin-top:4px;color:#374151">${r.recommendation}</div>`:''}
     </div></div>
     <label class="edit-label">① 送信先の役職者を選択</label>
-    <select id="contact-select" onchange="onContactChange(${JSON.stringify(r).replace(/'/g,"&#39;")})" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px">
+    <select id="contact-select" onchange="onContactChange()" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px">
       <option value="">読み込み中...</option>
     </select>
     <label class="edit-label">② メッセージ（自動生成・編集可能）</label>
@@ -1297,17 +1299,31 @@ async function loadCompanyContacts(r){
   }
 }
 
-function onContactChange(r){
+// 送信先の役職者を選び直したら、本文の冒頭の宛名（会社名・役職・氏名）を差し替える（それ以外の編集内容はそのまま残す）
+function addressBlockFor(r,contact){
+  const toName=contact?.name||'';
+  const toPosition=contact?.position||r.targetPosition||'';
+  return `${r.targetCompany||''}\n${toPosition||'ご担当者'}\n${toName?toName+'様':'ご担当者様'}`;
+}
+function onContactChange(){
+  const r=currentDetailReq;if(!r)return;
   const sel=document.getElementById('contact-select');
   const idx=sel.value;
   const contact=idx!==''?currentContacts[idx]:null;
-  buildDefaultMsg(r,contact);
+  const ta=document.getElementById('edit-msg');
+  const cur=ta?ta.value:'';
+  const cut=cur.indexOf('\n\n');
+  if(ta&&cut>0){
+    ta.value=addressBlockFor(r,contact)+cur.slice(cut);
+    document.getElementById('edit-char').textContent=ta.value.length+'/2000';
+    ta.style.transition='background .6s';ta.style.background='#fef9c3';setTimeout(()=>{ta.style.background='';},700);
+  }else buildDefaultMsg(r,contact);
 }
 
 function buildDefaultMsg(r,contact){
   const toName=contact?.name||'';
   const toPosition=contact?.position||r.targetPosition||'';
-  const addressBlock=`${r.targetCompany||''}\n${toPosition||'ご担当者'}\n${toName?toName+'様':'ご担当者様'}`;
+  const addressBlock=addressBlockFor(r,contact);
   const memberName=r.memberName||'—';
   const memberCompany=r.memberCompany||'—';
   const introLine=r.matchReason
@@ -1334,6 +1350,8 @@ async function sendRecommendation(r){
   const idx=sel.value;
   const contact=idx!==''?currentContacts[idx]:null;
   if(!contact){if(!confirm('役職者が選択されていません。既存データから自動検索して送信しますか？'))return;}
+  // 送信先と本文の宛名が食い違っていないか確認する（宛名の手直しミス防止）
+  if(contact&&contact.name){const head=msg.split('\n\n')[0]||'';const nk=v=>String(v||'').replace(/[\s　]/g,'');if(!nk(head).includes(nk(contact.name))&&!confirm(`本文冒頭の宛名に、送信先の「${contact.name}」様の名前が見当たりません。\n\n送信先：${contact.name}（${contact.email||''}）\n本文の宛名：${head.replace(/\n/g,' ')}\n\nこのまま送信しますか？`))return;}
   const btn=document.getElementById('btn-send');
   btn.textContent='送信中...';btn.disabled=true;
   try{
