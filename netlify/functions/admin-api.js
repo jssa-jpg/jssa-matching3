@@ -45,6 +45,28 @@ async function getToken(){
   return data.access_token;
 }
 
+// ユーザー登録シートの「事業概要（紹介用）」列。M〜AA=プロフィール、AB=会員ステータスの次
+const OVERVIEW_COL='AC';
+const OVERVIEW_COL_IDX=28;
+// 会社HPの本文テキストを取得する（タイトル・説明文・本文の先頭部分。取得できなければ空文字）
+async function fetchSiteText(url){
+  try{
+    let u=String(url||'').trim();if(!u||u==='不明')return'';
+    if(!/^https?:\/\//i.test(u))u='https://'+u;
+    const ac=new AbortController();const t=setTimeout(()=>ac.abort(),7000);
+    const r=await fetch(u,{signal:ac.signal,redirect:'follow',headers:{'User-Agent':'Mozilla/5.0 (compatible; JSSA-Matching/1.0)','Accept-Language':'ja'}});
+    clearTimeout(t);
+    if(!r.ok)return'';
+    const html=(await r.text()).slice(0,400000);
+    const pick=re=>{const m=html.match(re);return m?m[1]:'';};
+    const title=pick(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const desc=pick(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)||pick(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i);
+    const body=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<noscript[\s\S]*?<\/noscript>/gi,' ').replace(/<[^>]+>/g,' ')
+      .replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#\d+;/g,' ').replace(/\s+/g,' ').trim();
+    return `タイトル：${title.trim()}\n説明：${desc.trim()}\n本文：${body.slice(0,3500)}`;
+  }catch(e){console.error('HP取得エラー:',url,e.message);return'';}
+}
+
 async function getSheet(token,name){
   const id=process.env.GOOGLE_SHEET_ID;
   const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(name)}`,{headers:{'Authorization':`Bearer ${token}`}});
@@ -538,8 +560,21 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({success:true,items})};
     }
 
+    if(action==='saveMemberOverview'){
+      // 事務局が確認・修正した事業概要を、ユーザー登録シートのAC列に保存する（次回からはこの文章をそのまま使う）
+      const{userId,overview}=body;
+      if(!userId)return{statusCode:400,headers,body:JSON.stringify({error:'userIdが必要です'})};
+      const userRows=await getSheet(token,'ユーザー登録');
+      const idx=userRows.findIndex((r,i)=>i>0&&r[0]===userId);
+      if(idx<0)return{statusCode:404,headers,body:JSON.stringify({error:'ユーザーが見つかりません'})};
+      if(!userRows[0]||!userRows[0][OVERVIEW_COL_IDX])await updateCell(token,'ユーザー登録',1,OVERVIEW_COL,'事業概要（紹介用・事務局確認済み）');
+      await updateCell(token,'ユーザー登録',idx+1,OVERVIEW_COL,String(overview||'').trim().slice(0,400));
+      return{statusCode:200,headers,body:JSON.stringify({success:true})};
+    }
+
     if(action==='getMemberOverview'){
-      // 紹介メール用に、会員自身の「事業概要」と、紹介先企業にとっての「面談メリット」をAIで生成し、会社HPと合わせて返す
+      // 紹介メール用に、会員自身の「事業概要」と、紹介先企業にとっての「面談メリット」を返す。
+      // 事業概要は、①ユーザー登録AC列に保存済みの文章（事務局確認済み）を最優先、②なければ会社HPの実際の内容からAIで作成（推測では書かない）
       const{userId,targetCompany,matchReason}=body;
       if(!userId)return{statusCode:400,headers,body:JSON.stringify({error:'userIdが必要です'})};
       const userRows=await getSheet(token,'ユーザー登録');
@@ -547,33 +582,47 @@ exports.handler=async(event)=>{
       if(idx<0)return{statusCode:404,headers,body:JSON.stringify({error:'ユーザーが見つかりません'})};
       const u=userRows[idx];
       const website=u[7]||'';
+      const savedOverview=String(u[OVERVIEW_COL_IDX]||'').trim();
       const profile={
         fundingRound:u[12]||'',fundingTarget:u[13]||'',challenges:u[14]||'',globalExpansion:u[15]||'',kpi:u[16]||'',
         supportCount:u[17]||'',supportArea:u[18]||'',investmentIndustry:u[19]||'',targetRound:u[20]||''
       };
       const isSupporter=!!(profile.supportCount||profile.supportArea||profile.investmentIndustry||profile.targetRound);
-      let overview='';
+      let overview=savedOverview;
       let meetingBenefit='';
+      let overviewSource=savedOverview?'saved':'';
+      let siteText='';
+      if(!savedOverview&&website)siteText=await fetchSiteText(website);
       if(ANTHROPIC_API_KEY){
         try{
           const details=isSupporter
             ?`支援実績件数：${profile.supportCount||'不明'}／得意な支援領域：${profile.supportArea||'不明'}／投資先・支援先の業種：${profile.investmentIndustry||'不明'}／対応可能なラウンド：${profile.targetRound||'不明'}`
             :`調達ラウンド：${profile.fundingRound||'不明'}／調達希望額：${profile.fundingTarget||'不明'}／事業課題：${profile.challenges||'不明'}／海外展開：${profile.globalExpansion||'不明'}／主要KPI：${profile.kpi||'不明'}`;
-          const prompt=`あなたはJSSA（日本スタートアップ支援協会）の紹介メール作成を支援するアシスタントです。\n以下の会員企業の情報をもとに、2つの文章を作成してください。\n\n会社名：${u[2]||''}\n立場：${isSupporter?'支援者（投資家・VC等）':'スタートアップ'}\n情報：${details}\n${targetCompany?`紹介先企業：${targetCompany}\n`:''}${matchReason?`マッチ理由：${matchReason}\n`:''}\n\n① 事業概要：他社に紹介するメールに載せる、この会員企業の事業概要。80文字程度の自然な日本語。\n② 面談メリット：紹介先企業（${targetCompany||'紹介先企業'}）から見て、この会員と面談することにどんなメリットがあるかを、150文字程度の自然な日本語で。紹介先企業の立場で読んで前向きになれる、具体的で説得力のある内容にしてください。\n\n以下のJSON形式のみで出力してください。前置きや説明文は不要です。\n{"overview":"①の文章","meetingBenefit":"②の文章"}`;
-          const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,messages:[{role:'user',content:prompt}]})});
+          const src=savedOverview
+            ?`事業概要（事務局確認済み・この内容を正とする）：${savedOverview}\n`
+            :(siteText?`会社HP（${website}）の掲載内容（抜粋）：\n${siteText}\n`:'会社HPの内容：取得できませんでした\n');
+          const prompt=`あなたはJSSA（日本スタートアップ支援協会）の紹介メール作成を支援するアシスタントです。\n以下の会員企業の情報をもとに、2つの文章を作成してください。\n\n会社名：${u[2]||''}\n立場：${isSupporter?'支援者（投資家・VC等）':'スタートアップ'}\n${src}アンケート情報：${details}\n${targetCompany?`紹介先企業：${targetCompany}\n`:''}${matchReason?`マッチ理由：${matchReason}\n`:''}\n\n【最重要ルール】事業内容は、上記の「事業概要」または「会社HPの掲載内容」に書かれている事実だけを使ってください。会社名から事業内容を推測したり、書かれていないサービス・技術・海外展開などを作ったりしないでください。事業内容がわからない場合、overviewは空文字にしてください。\n\n① 事業概要：他社に紹介するメールに載せる、この会員企業の事業概要。80文字程度の自然な日本語。${savedOverview?'（事務局確認済みの文章があるので、そのまま使うため①は空文字で構いません）':''}\n② 面談メリット：紹介先企業（${targetCompany||'紹介先企業'}）から見て、この会員と面談することにどんなメリットがあるかを、150文字程度の自然な日本語で。上記の事実に基づき、紹介先企業の立場で読んで前向きになれる具体的な内容にしてください。\n\n以下のJSON形式のみで出力してください。前置きや説明文は不要です。\n{"overview":"①の文章","meetingBenefit":"②の文章"}`;
+          const aiRes=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:600,messages:[{role:'user',content:prompt}]})});
           const aiData=await aiRes.json();
           const aiText=(aiData.content&&aiData.content[0]?aiData.content[0].text:'').trim();
           const cleanText=aiText.replace(/```json|```/g,'').trim();
           try{
-            const parsed=JSON.parse(cleanText);
-            overview=parsed.overview||'';
+            const parsed=JSON.parse(cleanText.slice(cleanText.indexOf('{'),cleanText.lastIndexOf('}')+1));
+            if(!savedOverview){overview=String(parsed.overview||'').trim();overviewSource=overview?'website':'';}
             meetingBenefit=parsed.meetingBenefit||'';
           }catch(pe){
             console.error('AI応答のJSON解析エラー:',pe.message,cleanText);
           }
         }catch(e){console.error('事業概要・面談メリット生成エラー:',e.message);}
       }
-      return{statusCode:200,headers,body:JSON.stringify({success:true,website,overview,meetingBenefit})};
+      // HPから作った事業概要はAC列に保存しておく（事務局が画面またはシートで直せる。直した内容が次回から優先される）
+      if(!savedOverview&&overview){
+        try{
+          if(!userRows[0]||!userRows[0][OVERVIEW_COL_IDX])await updateCell(token,'ユーザー登録',1,OVERVIEW_COL,'事業概要（紹介用・事務局確認済み）');
+          await updateCell(token,'ユーザー登録',idx+1,OVERVIEW_COL,overview);
+        }catch(e){console.error('事業概要の保存エラー:',e.message);}
+      }
+      return{statusCode:200,headers,body:JSON.stringify({success:true,website,overview,meetingBenefit,overviewSource,siteFetched:!!siteText})};
     }
 
     if(action==='getCompanyContacts'){

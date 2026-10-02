@@ -1249,6 +1249,12 @@ function openDetail(r){
     <select id="contact-select" onchange="onContactChange()" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;margin-bottom:12px">
       <option value="">読み込み中...</option>
     </select>
+    <label class="edit-label">会員（${hxs(r.memberCompany||'')}）の事業概要 <span id="ov-src" style="font-weight:400;font-size:12px;color:#6b7280">読み込み中…</span></label>
+    <textarea id="ov-edit" rows="3" placeholder="事業概要を読み込み中…" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;margin:4px 0 14px;flex-wrap:wrap">
+      <button type="button" onclick="saveMemberOverview()" style="padding:6px 12px;border-radius:6px;border:1px solid #639922;background:#f0f7e6;color:#3b6212;font-size:12px;cursor:pointer">💾 この事業概要を保存して本文に反映</button>
+      <span id="ov-msg" style="font-size:12px;color:#6b7280">保存すると、ユーザー登録シートのAC列に記録され、次回からこの文章が使われます。</span>
+    </div>
     <label class="edit-label">② メッセージ（自動生成・編集可能）</label>
     <textarea id="edit-msg" rows="12"></textarea>
     <div class="char-count" id="edit-char">0/2000</div>
@@ -1274,12 +1280,32 @@ async function loadMemberOverview(r){
     const data=await res.json();
     if(data.success){
       currentMemberOverview={website:data.website||'',overview:data.overview||'',meetingBenefit:data.meetingBenefit||'',loaded:true};
+      const ov=document.getElementById('ov-edit');if(ov)ov.value=data.overview||'';
+      const srcEl=document.getElementById('ov-src');
+      if(srcEl)srcEl.textContent=data.overviewSource==='saved'?'（保存済みの文章）':data.overviewSource==='website'?'（会社HPの内容から自動作成。内容を確認し、違っていれば直して保存してください）':'（HPから読み取れませんでした。入力して保存してください）';
       const sel=document.getElementById('contact-select');
       const idx=sel?sel.value:'';
       const contact=(idx!==''&&currentContacts[idx])?currentContacts[idx]:null;
       buildDefaultMsg(r,contact);
     }
   }catch(e){console.error('loadMemberOverview error:',e);}
+}
+
+async function saveMemberOverview(){
+  const r=currentDetailReq;if(!r||!r.userId){alert('会員IDが不明なため保存できません');return;}
+  const ov=document.getElementById('ov-edit');const text=(ov?ov.value:'').trim();
+  if(!text){alert('事業概要を入力してください');return;}
+  const msgEl=document.getElementById('ov-msg');msgEl.textContent='保存中…';
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'saveMemberOverview',userId:r.userId,overview:text})});
+    const data=await res.json();
+    if(!data.success){msgEl.textContent='保存できませんでした：'+(data.error||'');return;}
+    currentMemberOverview.overview=text;
+    const ta=document.getElementById('edit-msg');
+    if(ta){ta.value=ta.value.replace(/^事業概要：.*$/m,'事業概要：'+text.replace(/\n/g,' '));document.getElementById('edit-char').textContent=ta.value.length+'/2000';}
+    msgEl.textContent='✅ 保存し、本文の「事業概要」を差し替えました。';
+    document.getElementById('ov-src').textContent='（保存済みの文章）';
+  }catch(e){msgEl.textContent='保存エラー：'+e.message;}
 }
 
 let currentContacts=[];

@@ -59,7 +59,7 @@ exports.handler = async (event) => {
         const mr0 = await values(tk0, 'マッチング結果!A:I');
         history = (mr0 || []).slice(1).filter(r => r[2] === qs.user && String(r[6] || '').normalize('NFKC').toLowerCase().includes(kw) && (r[8] === '企業名送信済み' || r[8] === '除外')).map(r => ({ バッチ日時: jst(r[1]), ステータス: r[8] }));
       }
-      return { statusCode: 200, headers, body: JSON.stringify({ 件数: hits.length, この会員への案内履歴: history, 名刺: hits.map(p => ({ 会社名: p.company, 部署: p.department, 役職: p.position, 属性: p.attribute, 業種詳細: p.industryDetail, 地域: p.prefecture, URLあり: !!(p.siteUrl && p.siteUrl !== '不明'), 案内済み: intro.has(n(p.company)) })) }, null, 1) };
+      return { statusCode: 200, headers, body: JSON.stringify({ 件数: hits.length, この会員への案内履歴: history, 名刺: hits.map(p => ({ 会社名: p.company, 部署: p.department, 役職: p.position, 属性: p.attribute, 業種詳細: p.industryDetail, 地域: p.prefecture, URLあり: !!(p.siteUrl && p.siteUrl !== '不明'), URL: p.siteUrl || '', 企業特徴: p.features || '', 案内済み: intro.has(n(p.company)) })) }, null, 1) };
     }
     if ((event.queryStringParameters || {}).selftest) { await appendSystemLog('selftest', '', 'OK', 0, 'ログ書き込みテスト'); }
     const tk = await token();
