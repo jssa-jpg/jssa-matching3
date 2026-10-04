@@ -217,6 +217,68 @@ exports.handler=async(event)=>{
       return{statusCode:200,headers,body:JSON.stringify({success:true,rows,now:new Date().toISOString()})};
     }
 
+    if(action==='prepareThreeWay'){
+      // 3者メール（紹介先・会員・岡代表のお繋ぎメール）の下書きを作る。宛先は推薦メールの送信先（O列）と会員（J列）
+      const{rowIndex}=body;
+      if(!rowIndex)return{statusCode:400,headers,body:JSON.stringify({error:'rowIndexが必要です'})};
+      const rows=await getSheet(token,'会いたいリクエスト');
+      const r=rows[rowIndex-1];
+      if(!r)return{statusCode:404,headers,body:JSON.stringify({error:'リクエストが見つかりません'})};
+      const targetCompany=String(r[2]||'').trim();
+      const recTo=String(r[14]||'');
+      const em=recTo.match(/[（(]([^（）()\s]+@[^（）()\s]+)[）)]/);
+      const contactEmail=em?em[1].trim():'';
+      let contact={company:targetCompany,name:recTo.replace(/[（(].*$/,'').replace(targetCompany,'').trim(),position:String(r[3]||'').trim(),department:'',email:contactEmail};
+      if(contactEmail){
+        const ps=await getParticipants();
+        const cands=ps.filter(p=>String(p.email||'').toLowerCase()===contactEmail.toLowerCase());
+        const best=cands.reduce((a,b)=>!a||isNewerCard(b,a)?b:a,null);
+        if(best)contact={company:best.company||targetCompany,name:best.name||contact.name,position:best.position||'',department:best.department||'',email:contactEmail};
+      }
+      const userId=String(r[1]||'').trim();
+      let member={company:String(r[7]||'').trim(),name:String(r[8]||'').trim(),email:String(r[9]||'').trim(),position:'',website:'',overview:''};
+      try{
+        const u=(await getSheet(token,'ユーザー登録')).find((x,i)=>i>0&&String(x[0]||'').trim()===userId);
+        if(u){member.company=String(u[2]||member.company).trim();member.position=String(u[3]||'').trim();member.name=String(u[4]||member.name).trim();member.email=String(u[5]||member.email).trim();member.website=String(u[7]||'').trim();member.overview=String(u[OVERVIEW_COL_IDX]||'').trim();}
+      }catch(e){console.error('会員情報の取得エラー:',e.message);}
+      const cName=contact.name||'ご担当者',mName=member.name||'ご担当者';
+      const cLine=`${contact.company}${contact.department?' '+contact.department:''}${contact.position?' '+contact.position:''}　${cName}様`;
+      const mLine=`${member.company}${member.position?' '+member.position:''}　${mName}様`;
+      const subject=`【JSSAご紹介】${contact.company} ${cName}様 ／ ${member.company} ${mName}様（面談のお繋ぎ）`;
+      const text=`${cLine}\n${mLine}\n\nいつもお世話になっております。日本スタートアップ支援協会（JSSA）の岡隆宏です。\n\n${cName}様、このたびは${member.company}様との面談をご快諾いただき、誠にありがとうございます。\n${mName}様、${contact.company}の${cName}様より、面談をお受けいただけるとのお返事をいただきました。\n\n本メールにて、お二人をおつなぎいたします。\n\n■ ${cLine}\n　メール：${contact.email||'—'}\n\n■ ${mLine}\n${member.overview?`　事業概要：${member.overview}\n`:''}${member.website?`　会社HP：${member.website}\n`:''}　メール：${member.email||'—'}\n\nお手数ですが、${mName}様から${cName}様へ、ご都合のよい候補日時を3つほどお送りいただけますでしょうか（オンライン・ご訪問のご希望もあわせてお知らせください）。\n以降のご連絡は、お二人で直接お進めいただけますと幸いです。面談の日程が決まりましたら、私にも一言お知らせいただけますと助かります。\n\nお二人にとって実りある機会となりますことを、心より願っております。\nどうぞよろしくお願いいたします。`;
+      return{statusCode:200,headers,body:JSON.stringify({success:true,contact,member,subject,emailBody:text,alreadySent:!!r[17]})};
+    }
+
+    if(action==='sendThreeWay'){
+      // 3者メールを紹介先と会員の両方に送る（差出人は岡代表。全員に返信すれば3者に届く）。事務局には控えを別送し、進捗（回答OK・3者メール日時）を記録する
+      const{rowIndex,subject,emailBody,contactEmail,memberEmail}=body;
+      const okMail=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
+      if(!rowIndex||!okMail(contactEmail)||!okMail(memberEmail))return{statusCode:400,headers,body:JSON.stringify({error:'紹介先・会員のメールアドレスを確認してください'})};
+      if(!String(emailBody||'').trim()||!String(subject||'').trim())return{statusCode:400,headers,body:JSON.stringify({error:'件名と本文を入力してください'})};
+      const text=emailBody.includes('代表理事　岡　隆宏')?emailBody:`${emailBody.trim()}\n\n${SIGNATURE}`;
+      const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const wrapHtml=t=>`<div style="font-family:sans-serif;max-width:640px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:10px;"><div style="font-size:14px;color:#374151;line-height:1.8;">${esc(t).replace(/\n/g,'<br>')}</div></div>`;
+      const to=[String(contactEmail).trim(),String(memberEmail).trim()];
+      const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'岡 隆宏（JSSA） <tok@yumeplanning.jp>',to,subject,html:wrapHtml(text),text})});
+      const resData=await res.json();
+      if(!res.ok)return{statusCode:500,headers,body:JSON.stringify({error:'メール送信失敗: '+JSON.stringify(resData)})};
+      let copied=true;
+      try{
+        const sentAt=new Date(Date.now()+9*3600*1000).toISOString().slice(0,16).replace('T',' ');
+        const head=`━━━━━━━━━━━━━━━━━━━━\n【控え】3者メール（お繋ぎメール）を送信しました\n送信日時：${sentAt}\n宛先：${to.join(' ／ ')}\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+        const cr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'tok@yumeplanning.jp',to:[OFFICE_EMAIL],subject:`【控え】${subject}`,html:wrapHtml(head+text)})});
+        copied=cr.ok;
+      }catch(e){copied=false;console.error('3者メール控えの送信エラー:',e.message);}
+      await ensureReqProgressHeader(token);
+      const now=new Date().toISOString();
+      const rows=await getSheet(token,'会いたいリクエスト');
+      const r=rows[rowIndex-1]||[];
+      const cells=[{range:`会いたいリクエスト!R${rowIndex}`,value:now}];
+      if(!r[15])cells.push({range:`会いたいリクエスト!P${rowIndex}`,value:'OK'},{range:`会いたいリクエスト!Q${rowIndex}`,value:now});
+      await writeCells(token,cells);
+      return{statusCode:200,headers,body:JSON.stringify({success:true,message:copied?'3者メールを送信しました（控えを事務局に送信）':'3者メールを送信しました（控えの送信に失敗しました）'})};
+    }
+
     if(action==='setProgress'){
       // 進捗を記録する：answer（紹介先の回答 OK/NG）、three（3者メール送信）、done（完了）。value を空にすると取り消し
       const{rowIndex,field,value}=body;

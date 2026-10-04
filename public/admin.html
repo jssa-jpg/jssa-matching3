@@ -620,8 +620,8 @@ function drawProgress(){
     if(n.i===1)return btn('マッチング結果を開く',"setTab('matches');document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.textContent.includes('マッチング結果')))",true)+btn('終了にする',`closeProgBatch(${k},'終了')`);
     if(n.i===2)return btn('終了にする（返信なし・該当なし）',`closeProgBatch(${k},'終了')`);
     if(n.i===3)return btn('担当者を選んで推薦',`progOpenDetail(${k})`,true);
-    if(n.i===4)return btn('面談OK',`setProg(${k},'answer','OK')`,true)+btn('NG',`setProg(${k},'answer','NG')`);
-    if(n.i===5)return btn('3者メール送信済みにする',`setProg(${k},'three','1')`,true);
+    if(n.i===4)return btn('面談OK → 3者メールを作成',`openThreeWay(${p.row.req.rowIndex})`,true)+btn('面談OKだけ記録',`setProg(${k},'answer','OK')`)+btn('NG',`setProg(${k},'answer','NG')`);
+    if(n.i===5)return btn('3者メールを作成',`openThreeWay(${p.row.req.rowIndex})`,true)+btn('手動で送った（送信済みにする）',`setProg(${k},'three','1')`);
     if(n.i===6)return btn('完了にする',`setProg(${k},'done','1')`,true);
     return'';
   };
@@ -655,6 +655,55 @@ async function progCall(payload){
     const d=await res.json();if(!d.success)throw new Error(d.error||'失敗しました');
     await loadProgress();
   }catch(e){alert('エラー: '+e.message);}
+}
+// ===== 3者メール（紹介先・会員・岡代表のお繋ぎメール） =====
+let threeWayRow=null;
+async function openThreeWay(rowIndex){
+  const area=document.getElementById('detail-area');
+  if(!area)return;
+  isDetailOpen=true;threeWayRow=rowIndex;
+  area.innerHTML='<div class="detail-wrap" style="display:block"><div class="empty">3者メールの下書きを作成中…</div></div>';
+  area.scrollIntoView({behavior:'smooth'});
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'prepareThreeWay',rowIndex})});
+    const d=await res.json();
+    if(!d.success)throw new Error(d.error||'下書きを作れませんでした');
+    if(d.alreadySent&&!confirm('この案件は、すでに3者メールを送信済みです。もう一度作成しますか？')){closeDetail();return;}
+    const c=d.contact||{},m=d.member||{};
+    const inp='width:100%;box-sizing:border-box;padding:9px;border-radius:8px;border:1px solid #d1d5db;font-size:13px';
+    area.innerHTML=`<div class="detail-wrap" style="display:block">
+      <div class="detail-head"><div class="detail-title">🤝 3者メール（お繋ぎ）：${hxs(c.company||'')} × ${hxs(m.company||'')}</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
+      <div class="from-box"><div class="from-label">宛先（2名に同時に送ります。差出人は岡代表なので、「全員に返信」で3者に届きます）</div><div class="from-info" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><b>紹介先</b>：${hxs(c.company||'')} ${hxs(c.position||'')} ${hxs(c.name||'')}様<br><input id="tw-contact" type="email" value="${hxs(c.email||'')}" placeholder="紹介先のメールアドレス" style="${inp};margin-top:4px"></div>
+        <div><b>会員</b>：${hxs(m.company||'')} ${hxs(m.position||'')} ${hxs(m.name||'')}様<br><input id="tw-member" type="email" value="${hxs(m.email||'')}" placeholder="会員のメールアドレス" style="${inp};margin-top:4px"></div>
+      </div></div>
+      <label class="edit-label">件名</label>
+      <input id="tw-subject" type="text" value="${hxs(d.subject||'')}" style="${inp};margin-bottom:12px">
+      <label class="edit-label">本文（編集できます）</label>
+      <textarea id="tw-body" rows="18">${hxs(d.emailBody||'')}</textarea>
+      <div style="font-size:12px;color:#6b7280;margin:4px 0 12px">※送信時に、本文の末尾へ岡代表の署名が自動で付きます。事務局（tok@yumeplanning.jp）には控えが届き、進捗の「紹介先の回答（面談OK）」と「3者メール」が記録されます。</div>
+      <div class="detail-actions">
+        <button class="btn-cancel" onclick="closeDetail()">キャンセル</button>
+        <button class="btn-send" id="tw-send" onclick="sendThreeWay()">🤝 3者メールを送信する</button>
+      </div>
+    </div>`;
+  }catch(e){area.innerHTML=`<div class="detail-wrap" style="display:block"><div class="empty">エラー：${hxs(e.message)}</div><div class="detail-actions"><button class="btn-cancel" onclick="closeDetail()">閉じる</button></div></div>`;}
+}
+async function sendThreeWay(){
+  const v=id=>(document.getElementById(id)||{}).value||'';
+  const contactEmail=v('tw-contact').trim(),memberEmail=v('tw-member').trim(),subject=v('tw-subject').trim(),emailBody=v('tw-body');
+  const ok=e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  if(!ok(contactEmail)||!ok(memberEmail)){alert('紹介先と会員のメールアドレスを確認してください');return;}
+  if(!subject||!emailBody.trim()){alert('件名と本文を入力してください');return;}
+  if(!confirm(`次の2名に3者メールを送信します。\n\n紹介先：${contactEmail}\n会員　：${memberEmail}\n\nよろしいですか？`))return;
+  const btn=document.getElementById('tw-send');btn.textContent='送信中...';btn.disabled=true;
+  try{
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendThreeWay',rowIndex:threeWayRow,subject,emailBody,contactEmail,memberEmail})});
+    const d=await res.json();
+    if(!d.success)throw new Error(d.error||'送信できませんでした');
+    closeDetail();alert(d.message||'3者メールを送信しました');
+    if(currentTab==='progress')loadProgress();else loadRequests();
+  }catch(e){alert('エラー: '+e.message);btn.textContent='🤝 3者メールを送信する';btn.disabled=false;}
 }
 function progOpenDetail(k){
   const p=progRows[k];if(!p||!p.row.req)return;
@@ -1223,7 +1272,7 @@ function renderCards(){
       ${r.matchReason?`<div class="reason-box">🎯 ${hx(r.matchReason)}</div>`:''}
       ${r.message?`<div class="msg-box" style="white-space:pre-wrap;max-height:160px;overflow:auto">${hx(r.message)}</div>`:''}
       <div class="actions">
-        ${r.status==='推薦メール送信済'?`<button class="btn-approve" style="background:#9ca3af" onclick="openDetail(window._reqCards[${i}])">🔁 送信済み（再送する場合）</button>`:`<button class="btn-approve" onclick="openDetail(window._reqCards[${i}])">✅ 担当者選択・推薦メール</button>`}
+        ${r.status==='推薦メール送信済'?`<button class="btn-approve" style="background:#639922" onclick="openThreeWay(${r.rowIndex})">🤝 3者メール（お繋ぎ）を作成</button><button class="btn-decline" style="color:#6b7280;border-color:#d1d5db" onclick="openDetail(window._reqCards[${i}])">🔁 推薦メール再送</button>`:`<button class="btn-approve" onclick="openDetail(window._reqCards[${i}])">✅ 担当者選択・推薦メール</button>`}
         <button class="btn-decline" onclick="doDecline(window._reqCards[${i}])">❌ 見送り</button>
         <button class="btn-delete" onclick="doDelete(window._reqCards[${i}])" title="ゴミ箱へ">🗑</button>
       </div>
