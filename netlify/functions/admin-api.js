@@ -245,13 +245,14 @@ exports.handler=async(event)=>{
       const cLine=`${contact.company}${contact.department?' '+contact.department:''}${contact.position?' '+contact.position:''}　${cName}様`;
       const mLine=`${member.company}${member.position?' '+member.position:''}　${mName}様`;
       const subject=`【JSSAご紹介】${contact.company} ${cName}様 ／ ${member.company} ${mName}様（面談のお繋ぎ）`;
-      const text=`${cLine}\n${mLine}\n\nいつもお世話になっております。日本スタートアップ支援協会（JSSA）の岡隆宏です。\n\n${cName}様、このたびは${member.company}様との面談をご快諾いただき、誠にありがとうございます。\n${mName}様、${contact.company}の${cName}様より、面談をお受けいただけるとのお返事をいただきました。\n\n本メールにて、お二人をおつなぎいたします。\n\n■ ${cLine}\n　メール：${contact.email||'—'}\n\n■ ${mLine}\n${member.overview?`　事業概要：${member.overview}\n`:''}${member.website?`　会社HP：${member.website}\n`:''}　メール：${member.email||'—'}\n\nお手数ですが、${mName}様から${cName}様へ、ご都合のよい候補日時を3つほどお送りいただけますでしょうか（オンライン・ご訪問のご希望もあわせてお知らせください）。\n以降のご連絡は、お二人で直接お進めいただけますと幸いです。面談の日程が決まりましたら、私にも一言お知らせいただけますと助かります。\n\nお二人にとって実りある機会となりますことを、心より願っております。\nどうぞよろしくお願いいたします。`;
+      const text=`${cLine}\n${mLine}\n\nいつもお世話になっております。日本スタートアップ支援協会（JSSA）の岡隆宏です。\n\n${cName}様、このたびは${member.company}様との面談をご快諾いただき、誠にありがとうございます。\n${mName}様、${contact.company}の${cName}様より、面談をお受けいただけるとのお返事をいただきました。\n\n本メールにて、お二人をおつなぎいたします。\n\n■ ${cLine}\n　メール：${contact.email||'—'}\n\n■ ${mLine}\n${member.overview?`　事業概要：${member.overview}\n`:''}${member.website?`　会社HP：${member.website}\n`:''}　メール：${member.email||'—'}\n\nお手数ですが、${mName}様から${cName}様へ、ご都合のよい候補日時を3つほどお送りいただけますでしょうか（オンライン・ご訪問のご希望もあわせてお知らせください）。\nなお、面談の日程が決まるまでは、お手数ですが私（岡）もCCに入れたまま、「全員に返信」でやり取りをお進めいただけますでしょうか。日程が確定しましたら、以降はお二人で直接ご連絡いただいて構いません。\n\nお二人にとって実りある機会となりますことを、心より願っております。\nどうぞよろしくお願いいたします。`;
       return{statusCode:200,headers,body:JSON.stringify({success:true,contact,member,subject,emailBody:text,alreadySent:!!r[17]})};
     }
 
     if(action==='sendThreeWay'){
       // 3者メールを紹介先と会員の両方に送る（差出人は岡代表。全員に返信すれば3者に届く）。事務局には控えを別送し、進捗（回答OK・3者メール日時）を記録する
       const{rowIndex,subject,emailBody,contactEmail,memberEmail}=body;
+      const ccList=String(body.cc==null?OFFICE_EMAIL:body.cc).split(/[,、\s]+/).map(x=>x.trim()).filter(Boolean);
       const okMail=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
       if(!rowIndex||!okMail(contactEmail)||!okMail(memberEmail))return{statusCode:400,headers,body:JSON.stringify({error:'紹介先・会員のメールアドレスを確認してください'})};
       if(!String(emailBody||'').trim()||!String(subject||'').trim())return{statusCode:400,headers,body:JSON.stringify({error:'件名と本文を入力してください'})};
@@ -259,11 +260,15 @@ exports.handler=async(event)=>{
       const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const wrapHtml=t=>`<div style="font-family:sans-serif;max-width:640px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:10px;"><div style="font-size:14px;color:#374151;line-height:1.8;">${esc(t).replace(/\n/g,'<br>')}</div></div>`;
       const to=[String(contactEmail).trim(),String(memberEmail).trim()];
-      const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'岡 隆宏（JSSA） <tok@yumeplanning.jp>',to,subject,html:wrapHtml(text),text})});
+      if(ccList.some(x=>!okMail(x)))return{statusCode:400,headers,body:JSON.stringify({error:'CCのメールアドレスを確認してください'})};
+      // 既定で3者のやり取りにする：岡代表をCCに入れ、返信先（Reply-To）も3者全員にする（「返信」だけでも3者に届く）
+      const replyTo=[...new Set([...to,...ccList,OFFICE_EMAIL].map(x=>x.toLowerCase()))];
+      const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'岡 隆宏（JSSA） <tok@yumeplanning.jp>',to,cc:ccList.length?ccList:undefined,reply_to:replyTo,subject,html:wrapHtml(text),text})});
       const resData=await res.json();
       if(!res.ok)return{statusCode:500,headers,body:JSON.stringify({error:'メール送信失敗: '+JSON.stringify(resData)})};
       let copied=true;
-      try{
+      const officeInCc=ccList.map(x=>x.toLowerCase()).includes(OFFICE_EMAIL.toLowerCase());
+      if(!officeInCc)try{
         const sentAt=new Date(Date.now()+9*3600*1000).toISOString().slice(0,16).replace('T',' ');
         const head=`━━━━━━━━━━━━━━━━━━━━\n【控え】3者メール（お繋ぎメール）を送信しました\n送信日時：${sentAt}\n宛先：${to.join(' ／ ')}\n━━━━━━━━━━━━━━━━━━━━\n\n`;
         const cr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:'tok@yumeplanning.jp',to:[OFFICE_EMAIL],subject:`【控え】${subject}`,html:wrapHtml(head+text)})});
@@ -276,7 +281,7 @@ exports.handler=async(event)=>{
       const cells=[{range:`会いたいリクエスト!R${rowIndex}`,value:now}];
       if(!r[15])cells.push({range:`会いたいリクエスト!P${rowIndex}`,value:'OK'},{range:`会いたいリクエスト!Q${rowIndex}`,value:now});
       await writeCells(token,cells);
-      return{statusCode:200,headers,body:JSON.stringify({success:true,message:copied?'3者メールを送信しました（控えを事務局に送信）':'3者メールを送信しました（控えの送信に失敗しました）'})};
+      return{statusCode:200,headers,body:JSON.stringify({success:true,message:officeInCc?`3者メールを送信しました（CC：${ccList.join('、')}）`:copied?'3者メールを送信しました（控えを事務局に送信）':'3者メールを送信しました（控えの送信に失敗しました）'})};
     }
 
     if(action==='setProgress'){

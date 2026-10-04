@@ -673,15 +673,16 @@ async function openThreeWay(rowIndex){
     const inp='width:100%;box-sizing:border-box;padding:9px;border-radius:8px;border:1px solid #d1d5db;font-size:13px';
     area.innerHTML=`<div class="detail-wrap" style="display:block">
       <div class="detail-head"><div class="detail-title">🤝 3者メール（お繋ぎ）：${hxs(c.company||'')} × ${hxs(m.company||'')}</div><button class="btn-close" onclick="closeDetail()">✕ 閉じる</button></div>
-      <div class="from-box"><div class="from-label">宛先（2名に同時に送ります。差出人は岡代表なので、「全員に返信」で3者に届きます）</div><div class="from-info" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="from-box"><div class="from-label">宛先（2名に同時に送り、岡代表をCCに入れます。返信先も3者全員になるので、「返信」でも3者に届きます）</div><div class="from-info" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><b>紹介先</b>：${hxs(c.company||'')} ${hxs(c.position||'')} ${hxs(c.name||'')}様<br><input id="tw-contact" type="email" value="${hxs(c.email||'')}" placeholder="紹介先のメールアドレス" style="${inp};margin-top:4px"></div>
         <div><b>会員</b>：${hxs(m.company||'')} ${hxs(m.position||'')} ${hxs(m.name||'')}様<br><input id="tw-member" type="email" value="${hxs(m.email||'')}" placeholder="会員のメールアドレス" style="${inp};margin-top:4px"></div>
+        <div style="grid-column:1/3"><b>CC</b>（既定は岡代表。日程が決まるまで3者でやり取りします）<br><input id="tw-cc" type="text" value="tok@yumeplanning.jp" placeholder="CCのメールアドレス（複数は「,」区切り）" style="${inp};margin-top:4px"></div>
       </div></div>
       <label class="edit-label">件名</label>
       <input id="tw-subject" type="text" value="${hxs(d.subject||'')}" style="${inp};margin-bottom:12px">
       <label class="edit-label">本文（編集できます）</label>
       <textarea id="tw-body" rows="18">${hxs(d.emailBody||'')}</textarea>
-      <div style="font-size:12px;color:#6b7280;margin:4px 0 12px">※送信時に、本文の末尾へ岡代表の署名が自動で付きます。事務局（tok@yumeplanning.jp）には控えが届き、進捗の「紹介先の回答（面談OK）」と「3者メール」が記録されます。</div>
+      <div style="font-size:12px;color:#6b7280;margin:4px 0 12px">※送信時に、本文の末尾へ岡代表の署名が自動で付きます。岡代表はCCで受け取ります（CCから外した場合は控えが別に届きます）。進捗の「紹介先の回答（面談OK）」と「3者メール」が記録されます。</div>
       <div class="detail-actions">
         <button class="btn-cancel" onclick="closeDetail()">キャンセル</button>
         <button class="btn-send" id="tw-send" onclick="sendThreeWay()">🤝 3者メールを送信する</button>
@@ -691,14 +692,14 @@ async function openThreeWay(rowIndex){
 }
 async function sendThreeWay(){
   const v=id=>(document.getElementById(id)||{}).value||'';
-  const contactEmail=v('tw-contact').trim(),memberEmail=v('tw-member').trim(),subject=v('tw-subject').trim(),emailBody=v('tw-body');
+  const cc=v('tw-cc').trim(),contactEmail=v('tw-contact').trim(),memberEmail=v('tw-member').trim(),subject=v('tw-subject').trim(),emailBody=v('tw-body');
   const ok=e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
   if(!ok(contactEmail)||!ok(memberEmail)){alert('紹介先と会員のメールアドレスを確認してください');return;}
   if(!subject||!emailBody.trim()){alert('件名と本文を入力してください');return;}
-  if(!confirm(`次の2名に3者メールを送信します。\n\n紹介先：${contactEmail}\n会員　：${memberEmail}\n\nよろしいですか？`))return;
+  if(!confirm(`次の2名に3者メールを送信します。\n\n紹介先：${contactEmail}\n会員　：${memberEmail}\nCC　　：${cc||'（なし）'}\n\nよろしいですか？`))return;
   const btn=document.getElementById('tw-send');btn.textContent='送信中...';btn.disabled=true;
   try{
-    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendThreeWay',rowIndex:threeWayRow,subject,emailBody,contactEmail,memberEmail})});
+    const res=await fetch('/.netlify/functions/admin-api',{method:'POST',headers:{'Content-Type':'application/json','x-admin-password':adminPassword},body:JSON.stringify({action:'sendThreeWay',rowIndex:threeWayRow,subject,emailBody,contactEmail,memberEmail,cc})});
     const d=await res.json();
     if(!d.success)throw new Error(d.error||'送信できませんでした');
     closeDetail();alert(d.message||'3者メールを送信しました');
