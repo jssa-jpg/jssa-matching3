@@ -320,12 +320,16 @@ exports.handler=async(event)=>{
       const byEmail=new Map();participants.forEach(p=>{const e=String(p.email||'').trim().toLowerCase();if(e&&!byEmail.has(e))byEmail.set(e,p);});
       const users=await getSheet(token,'ユーザー登録');
       const userByEmail=new Map();users.slice(1).forEach(u=>{const e=String(u[5]||'').trim().toLowerCase();if(e)userByEmail.set(e,u);});
-      const kind=sub=>/^【控え】/.test(sub)?'控え（事務局へ）':/^【ご紹介】/.test(sub)?'推薦（紹介先へ）':/マッチング企業のご案内|ご指定企業へのご紹介/.test(sub)?'企業名案内（会員へ）':/返信|自動検出|要確認|エラー/.test(sub)?'事務局への通知':'その他';
+      const kind=sub=>/^【控え】/.test(sub)?'控え（事務局へ）':/^【ご紹介】/.test(sub)?'推薦（紹介先へ）':/^【JSSAご紹介】|面談のお繋ぎ/.test(sub)?'お繋ぎ（3者）':/マッチング企業のご案内|ご指定企業へのご紹介/.test(sub)?'企業名案内（会員へ）':/返信|自動検出|要確認|エラー/.test(sub)?'事務局への通知':'その他';
       const emails=(d.data||[]).map(m=>{
         const to=(Array.isArray(m.to)?m.to:[m.to]).filter(Boolean);
-        const first=String(to[0]||'').replace(/^.*</,'').replace(/>.*$/,'').trim().toLowerCase();
+        const addr=v=>String(v||'').replace(/^.*</,'').replace(/>.*$/,'').trim().toLowerCase();
+        // 宛先ごとに名刺データ（紹介先）またはユーザー登録（会員）から会社名・氏名を引く。会員として登録されていれば会員を優先
+        const look=e=>{const u=userByEmail.get(e);if(u)return{company:u[2]||'',name:u[4]||'',position:u[3]||'',member:true};const p=byEmail.get(e);return p?{company:p.company,name:p.name,position:p.position,department:p.department,prefecture:p.prefecture||''}:null;};
+        const first=addr(to[0]);
         const p=byEmail.get(first);const u=userByEmail.get(first);
-        return{id:m.id,to,subject:m.subject||'',createdAt:m.created_at,lastEvent:m.last_event||'',kind:kind(m.subject||''),
+        const recipients=to.map(x=>{const e=addr(x);return{email:e,info:look(e)};});
+        return{id:m.id,to,cc:(Array.isArray(m.cc)?m.cc:(m.cc?[m.cc]:[])).filter(Boolean),subject:m.subject||'',createdAt:m.created_at,lastEvent:m.last_event||'',kind:kind(m.subject||''),recipients,
           recipient:p?{company:p.company,name:p.name,position:p.position,department:p.department,prefecture:p.prefecture||''}:(u?{company:u[2]||'',name:u[4]||'',position:u[3]||'',member:true}:null)};
       });
       const last=(d.data||[]).length?(d.data[d.data.length-1].id):'';

@@ -721,6 +721,7 @@ function renderSentPanel(){
     <div class="enrich-actions" style="flex-wrap:wrap">
       <select id="sent-kind" onchange="drawSent()" style="padding:8px;border:1px solid #d1d5db;border-radius:8px">
         <option value="推薦（紹介先へ）">紹介先への推薦メール</option>
+        <option value="お繋ぎ（3者）">お繋ぎメール（3者）</option>
         <option value="企業名案内（会員へ）">会員への企業名案内</option>
         <option value="">すべて（事務局への通知を含む）</option>
       </select>
@@ -749,9 +750,13 @@ function drawSent(){
   const q=String((document.getElementById('sent-q')||{}).value||'').normalize('NFKC').toLowerCase().trim();
   const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const dt=v=>{const t=Date.parse(v);return isNaN(t)?esc(v):new Date(t+9*3600*1000).toISOString().slice(0,16).replace('T',' ');};
-  const list=sentEmails.map((m,i)=>({m,i})).filter(({m})=>(!kind||m.kind===kind)&&(!q||[m.subject,...(m.to||[]),m.recipient&&m.recipient.company,m.recipient&&m.recipient.name].join(' ').normalize('NFKC').toLowerCase().includes(q)));
+  const list=sentEmails.map((m,i)=>({m,i})).filter(({m})=>(!kind||m.kind===kind)&&(!q||[m.subject,...(m.to||[]),...(m.cc||[]),m.recipient&&m.recipient.company,m.recipient&&m.recipient.name,...(m.recipients||[]).map(x=>x.info?`${x.info.company} ${x.info.name}`:'')].join(' ').normalize('NFKC').toLowerCase().includes(q)));
   document.getElementById('sent-summary').innerHTML=`${list.length}通を表示（読み込み済み ${sentEmails.length}通）${sentHasMore?'':'／これ以上古い履歴はありません'}`;
-  box.innerHTML=(list.length?`<div class="enrich-log" style="max-height:none"><table><thead><tr><th>送信日時</th><th>種類</th><th>宛先</th><th>件名</th><th>状態</th><th></th></tr></thead><tbody>${list.map(({m,i})=>{const r=m.recipient;const who=r?`<b>${esc(r.company)}</b><br>${esc(r.prefecture?r.prefecture+'／':'')}${esc(r.name)}${r.position?'／'+esc(r.position):''}${r.member?'（会員）':''}<br>`:'';return`<tr><td style="white-space:nowrap">${dt(m.createdAt)}</td><td style="white-space:nowrap">${esc(m.kind)}</td><td>${who}<span style="color:#6b7280">${esc((m.to||[]).join(', '))}</span></td><td>${esc(m.subject)}</td><td style="white-space:nowrap">${esc(SENT_EV[m.lastEvent]||m.lastEvent||'—')}</td><td><button class="sel-btn" onclick="toggleSentBody(${i})">本文</button></td></tr><tr id="sent-body-${i}" style="display:none"><td colspan="6"></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">該当するメールはありません</div>')
+  box.innerHTML=(list.length?`<div class="enrich-log" style="max-height:none"><table><thead><tr><th>送信日時</th><th>種類</th><th>宛先</th><th>件名</th><th>状態</th><th></th></tr></thead><tbody>${list.map(({m,i})=>{const one=(r,e)=>`${r?`<b>${esc(r.company)}</b><br>${esc(r.prefecture?r.prefecture+'／':'')}${esc(r.name)}${r.position?'／'+esc(r.position):''}${r.member?'（会員）':''}<br>`:''}<span style="color:#6b7280">${esc(e)}</span>`;
+      const multi=(m.recipients||[]).length>1;
+      const whoCell=multi?m.recipients.map((x,j)=>`<div style="${j?'margin-top:6px;padding-top:6px;border-top:1px dashed #e5e7eb':''}">${x.info&&x.info.member?'<span style="font-size:11px;color:#639922">会員</span> ':'<span style="font-size:11px;color:#2563eb">紹介先</span> '}${one(x.info,x.email)}</div>`).join(''):`${one(m.recipient,(m.to||[]).join(', '))}`;
+      const ccLine=(m.cc||[]).length?`<div style="margin-top:4px;font-size:11px;color:#6b7280">CC：${esc(m.cc.join(', '))}</div>`:'';
+      return`<tr><td style="white-space:nowrap">${dt(m.createdAt)}</td><td style="white-space:nowrap">${esc(m.kind)}</td><td>${whoCell}${ccLine}</td><td>${esc(m.subject)}</td><td style="white-space:nowrap">${esc(SENT_EV[m.lastEvent]||m.lastEvent||'—')}</td><td><button class="sel-btn" onclick="toggleSentBody(${i})">本文</button></td></tr><tr id="sent-body-${i}" style="display:none"><td colspan="6"></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty">該当するメールはありません</div>')
     +(sentHasMore?`<div style="text-align:center;margin-top:12px"><button class="load-more-btn" onclick="loadSent(false)">さらに古い履歴を読み込む（100通）</button></div>`:'');
 }
 async function toggleSentBody(i){
